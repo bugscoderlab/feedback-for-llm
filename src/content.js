@@ -72,7 +72,7 @@
         <button class="ffab-btn ffab-ghost" id="ffab-dr-sel-add">Attach</button>
       </div>
     </div>
-    <button id="ffab-fab" title="Feedback for LLM">📝 Feedback <span class="ffab-cnt" id="ffab-cnt">0</span></button>
+    <button id="ffab-fab" class="ffab-hidden" title="Feedback for LLM">📝 Feedback <span class="ffab-cnt" id="ffab-cnt">0</span></button>
     <div id="ffab-markers"></div>`;
   // the page's own styles can be hostile — move UI to the top layer one node at a time
   while (root.firstElementChild) document.documentElement.appendChild(root.firstElementChild);
@@ -89,6 +89,9 @@
   function startPicking() {
     picking = true;
     document.body.classList.add("ffab-annotating");
+    // Picking replaces the panel with a crosshair, but the FAB stays as the
+    // only visible status indicator (it pulses in ffab-picking) and the way out.
+    show($("ffab-fab"));
     $("ffab-fab").classList.add("ffab-picking");
     $("ffab-dr-pick").classList.add("ffab-on");
     $("ffab-dr-pick").textContent = "🎯 Click an element… (Esc to cancel)";
@@ -376,11 +379,19 @@
 
   /* ---------------- fab / drawer wiring ---------------- */
 
+  // The FAB is not shown on page load — it appears only once the user opens the
+  // panel from the toolbar button (or the in-page button, when visible), and is
+  // hidden again when the panel closes. This keeps the host page clean.
   $("ffab-fab").addEventListener("click", () => {
-    const d = $("ffab-drawer");
-    d.classList.contains("ffab-hidden") ? show(d) : hide(d);
+    // While picking, a FAB click means "cancel" rather than "toggle panel".
+    if (picking) {
+      stopPicking();
+      show($("ffab-drawer"));
+      return;
+    }
+    setPanelOpen(!isPanelOpen());
   });
-  $("ffab-dr-close").addEventListener("click", () => hide($("ffab-drawer")));
+  $("ffab-dr-close").addEventListener("click", () => setPanelOpen(false));
   $("ffab-dr-pick").addEventListener("click", () => (picking ? stopPicking() : startPicking()));
   $("ffab-dr-sel-add").addEventListener("click", () => {
     const sel = $("ffab-dr-sel-input").value.trim();
@@ -398,11 +409,25 @@
     openPopover(innerWidth / 2 - 170, innerHeight / 2 - 150);
   });
 
-  browser.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "ffab:toggle") {
-      const d = $("ffab-drawer");
-      d.classList.contains("ffab-hidden") ? show(d) : hide(d);
+  /** True when the feedback panel (drawer) is visible. */
+  function isPanelOpen() {
+    return !$("ffab-drawer").classList.contains("ffab-hidden");
+  }
+
+  /** Open/close the panel; the FAB visibility follows it. */
+  function setPanelOpen(open) {
+    if (open) {
+      show($("ffab-drawer"));
+      show($("ffab-fab"));
+    } else {
+      hide($("ffab-drawer"));
+      hide($("ffab-fab"));
+      stopPicking(); // leaving the panel should never strand the picker armed
     }
+  }
+
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "ffab:toggle") setPanelOpen(!isPanelOpen());
   });
 
   /* ---------------- brief export ---------------- */
