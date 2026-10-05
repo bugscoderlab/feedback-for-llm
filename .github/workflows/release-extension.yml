@@ -1,0 +1,117 @@
+name: Release Firefox extension
+
+# Builds the "Feedback for LLM" extension, signs it through AMO's unlisted
+# channel, attaches the signed .xpi to a GitHub Release, and refreshes the
+# self-hosted update manifest on the gh-pages branch.
+#
+# Users install the signed .xpi once; from then on Firefox polls
+# extension-release/release.config.json → updateUrl (served from gh-pages) and
+# updates itself from the GitHub Release asset.
+#
+# Trigger: push a tag matching the version in feedback-extension/manifest.json
+#     git tag v1.1.0 && git push origin v1.1.0
+#
+# One-time setup (secrets, Pages, AMO keys): see extension-release/README.md
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-extension
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build extension bundle
+        run: node build.mjs
+
+      - name: Read build info
+        id: info
+        run: |
+          node -e "const i=require('./dist/build-info.json'); for (const k of ['version','artifactBase','addonId','channel']) console.log(k+'='+i[k])" >> "$GITHUB_OUTPUT"
+
+      - name: Lint built bundle
+        # --self-hosted allows the gecko.update_url that AMO-listed builds cannot have.
+        run: npx --yes web-ext@10 lint --self-hosted --source-dir "dist/${{ steps.info.outputs.artifactBase }}" --output text
+
+      - name: Verify tag matches manifest version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "${{ steps.info.outputs.version }}" ]; then
+            echo "::error::tag v$tag does not match manifest version ${{ steps.info.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Sign with AMO (unlisted)
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          npx --yes web-ext@10 sign \
+            --channel=unlisted \
+            --source-dir "dist/${{ steps.info.outputs.artifactBase }}" \
+            --artifacts-dir dist/signed \
+            --api-key "$WEB_EXT_API_KEY" \
+            --api-secret "$WEB_EXT_API_SECRET" \
+            --approval-timeout 900000 \
+            --no-input
+
+      - name: Normalize signed artifact name
+        run: |
+          set -euo pipefail
+          xpi="$(find dist/signed -maxdepth 1 -name '*.xpi' | head -n1)"
+          if [ -z "$xpi" ]; then
+            echo "::error::web-ext sign produced no .xpi (submission may still be awaiting AMO review)"
+            exit 1
+          fi
+          mv "$xpi" "dist/signed/${{ steps.info.outputs.artifactBase }}-${{ steps.info.outputs.version }}.xpi"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="v${{ steps.info.outputs.version }}"
+          xpi="dist/signed/${{ steps.info.outputs.artifactBase }}-${{ steps.info.outputs.version }}.xpi"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$xpi" --clobber
+          else
+            gh release create "$tag" "$xpi" \
+              --title "$tag" \
+              --notes "Feedback for LLM $tag — signed, self-updating Firefox extension."
+          fi
+
+      - name: Generate update manifest
+        run: node gen-updates.mjs "${{ steps.info.outputs.version }}"
+
+      - name: Publish update manifest to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./extension-release/dist/pages
+          enable_jekyll: false
+          force_orphan: true

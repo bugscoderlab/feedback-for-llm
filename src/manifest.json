@@ -1,0 +1,42 @@
+{
+  "manifest_version": 2,
+  "name": "Feedback for LLM",
+  "version": "1.0.0",
+  "description": "📝 Pick any element on a page, attach a remark, and export a markdown brief for your LLM coding agent. Ported from docs/brief/prototype/ annotation mode.",
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_title": "📝 Feedback for LLM — click to open the drawer",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "feedback.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

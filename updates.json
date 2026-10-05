@@ -1,0 +1,12 @@
+{
+  "addons": {
+    "feedback-for-llm@bugscoderlab.github.io": {
+      "updates": [
+        {
+          "version": "1.0.0",
+          "update_link": "https://github.com/bugscoderlab/feedback-for-llm/releases/download/v1.0.0/feedback-for-llm-1.0.0.xpi"
+        }
+      ]
+    }
+  }
+}

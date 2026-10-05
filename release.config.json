@@ -1,0 +1,9 @@
+{
+  "repo": "bugscoderlab/feedback-for-llm",
+  "sourceDir": "src",
+  "artifactBase": "feedback-for-llm",
+  "addonId": "feedback-for-llm@bugscoderlab.github.io",
+  "channel": "unlisted",
+  "updateUrl": "https://bugscoderlab.github.io/feedback-for-llm/updates.json",
+  "strictMinVersion": null
+}
