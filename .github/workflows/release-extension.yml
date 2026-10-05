@@ -5,13 +5,13 @@ name: Release Firefox extension
 # self-hosted update manifest on the gh-pages branch.
 #
 # Users install the signed .xpi once; from then on Firefox polls
-# extension-release/release.config.json → updateUrl (served from gh-pages) and
-# updates itself from the GitHub Release asset.
+# release.config.json → updateUrl (served from gh-pages) and updates itself
+# from the GitHub Release asset.
 #
-# Trigger: push a tag matching the version in feedback-extension/manifest.json
+# Trigger: push a tag matching the version in src/manifest.json
 #     git tag v1.1.0 && git push origin v1.1.0
 #
-# One-time setup (secrets, Pages, AMO keys): see extension-release/README.md
+# One-time setup (secrets, Pages, AMO keys): see README.md
 
 on:
   push:
@@ -29,9 +29,6 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: extension-release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -112,6 +109,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./extension-release/dist/pages
+          publish_dir: ./dist/pages
           enable_jekyll: false
           force_orphan: true

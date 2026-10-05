@@ -12,8 +12,8 @@
  *   [tag]      git/release tag                       (default: v<version>)
  *
  * Writes:
- *   extension-release/updates.json              committed record
- *   extension-release/dist/pages/updates.json   published to gh-pages
+ *   updates.json              committed record
+ *   dist/pages/updates.json   published to gh-pages
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";

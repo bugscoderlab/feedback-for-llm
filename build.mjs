@@ -2,14 +2,14 @@
 /**
  * Assemble a release-ready copy of the "Feedback for LLM" extension.
  *
- *   1. copy ../feedback-extension into dist/<artifactBase>/
+ *   1. copy src/ into dist/<artifactBase>/
  *   2. overlay the browser_specific_settings a signed, self-updating build needs
  *      (gecko.id, update_url, data_collection_permissions) — the source manifest
- *      in feedback-extension/ stays clean for local `about:debugging` testing
+ *      in src/ stays clean for local `about:debugging` testing
  *   3. zip dist/<artifactBase>/ for manual install / AMO upload
  *   4. write dist/build-info.json so CI can read the version and names
  *
- * Run from anywhere:  node extension-release/build.mjs
+ * Run from anywhere:  node build.mjs
  */
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
