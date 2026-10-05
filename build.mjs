@@ -8,6 +8,8 @@
  *      in src/ stays clean for local `about:debugging` testing
  *   3. zip dist/<artifactBase>/ for manual install / AMO upload
  *   4. write dist/build-info.json so CI can read the version and names
+ *   5. run check-hidden.mjs against the built bundle — refuses to ship a
+ *      "hidden" class that no CSS rule actually hides (the v1.0.1 bug)
  *
  * Run from anywhere:  node build.mjs
  */
@@ -63,6 +65,12 @@ if (cfg.channel === "listed") {
 }
 
 await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+
+// --- guard: fail on "hidden" classes nothing hides ---------------------------
+// Run against the BUILT bundle (not src/) so it validates exactly what ships.
+execFileSync("node", [join(here, "check-hidden.mjs"), "--dir", outDir], {
+  stdio: "inherit",
+});
 
 // --- zip ---------------------------------------------------------------------
 const version = manifest.version;
