@@ -11,6 +11,13 @@ name: Release Firefox extension
 # Trigger: push a tag matching the version in src/manifest.json
 #     git tag v1.1.0 && git push origin v1.1.0
 #
+# Or run it by hand (Actions → Release Firefox extension → Run workflow).
+# workflow_dispatch exists because a tag-triggered run executes the workflow AS
+# IT EXISTED ON THAT TAG: fixing the workflow without moving the tag changes
+# nothing, and re-running replays the original commit. This lets you re-release
+# the current main without moving tags. Set `tag` to also publish a GitHub
+# Release under that tag; leave it blank to publish artifacts only.
+#
 # One-time setup (secrets, Pages, AMO keys): see README.md
 
 on:
@@ -18,6 +25,16 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v1.1.0). Blank = artifacts only, no Release."
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run: build and lint only, skip signing and publishing."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -31,12 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
 
@@ -52,16 +67,30 @@ jobs:
         # --self-hosted allows the gecko.update_url that AMO-listed builds cannot have.
         run: npx --yes web-ext@10 lint --self-hosted --source-dir "dist/${{ steps.info.outputs.artifactBase }}" --output text
 
-      - name: Verify tag matches manifest version
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Resolve release tag
+        id: rel
+        # One place that decides which tag this run releases under.
+        # - tag push  → the pushed tag (validated against the manifest below)
+        # - manual    → the `tag` input, or blank for an artifacts-only run
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          if [ "$tag" != "${{ steps.info.outputs.version }}" ]; then
-            echo "::error::tag v$tag does not match manifest version ${{ steps.info.outputs.version }}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify tag matches manifest version
+        if: steps.rel.outputs.tag != ''
+        run: |
+          tag="${{ steps.rel.outputs.tag }}"
+          if [ "${tag#v}" != "${{ steps.info.outputs.version }}" ]; then
+            echo "::error::tag $tag does not match manifest version ${{ steps.info.outputs.version }}"
             exit 1
           fi
 
       - name: Sign with AMO (unlisted)
+        id: sign
+        if: ${{ !inputs.dry_run }}
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -77,6 +106,7 @@ jobs:
             --no-input
 
       - name: Normalize signed artifact name
+        if: ${{ !inputs.dry_run }}
         run: |
           set -euo pipefail
           xpi="$(find dist/signed -maxdepth 1 -name '*.xpi' | head -n1)"
@@ -87,24 +117,27 @@ jobs:
           mv "$xpi" "dist/signed/${{ steps.info.outputs.artifactBase }}-${{ steps.info.outputs.version }}.xpi"
 
       - name: Publish GitHub Release
+        if: ${{ !inputs.dry_run && steps.rel.outputs.tag != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="v${{ steps.info.outputs.version }}"
+          tag="${{ steps.rel.outputs.tag }}"
           xpi="dist/signed/${{ steps.info.outputs.artifactBase }}-${{ steps.info.outputs.version }}.xpi"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$xpi" --clobber
           else
             gh release create "$tag" "$xpi" \
               --title "$tag" \
-              --notes "Feedback for LLM $tag — signed, self-updating Firefox extension."
+              --notes "Feedback for LLM $tag - signed, self-updating Firefox extension."
           fi
 
       - name: Generate update manifest
-        run: node gen-updates.mjs "${{ steps.info.outputs.version }}"
+        if: ${{ !inputs.dry_run && steps.rel.outputs.tag != '' }}
+        run: node gen-updates.mjs "${{ steps.info.outputs.version }}" "${{ steps.rel.outputs.tag }}"
 
       - name: Publish update manifest to gh-pages
+        if: ${{ !inputs.dry_run && steps.rel.outputs.tag != '' }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -112,3 +145,11 @@ jobs:
           publish_dir: ./dist/pages
           enable_jekyll: false
           force_orphan: true
+
+      - name: Keep dry-run artifacts
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-${{ steps.info.outputs.version }}
+          path: dist/
+          retention-days: 7
