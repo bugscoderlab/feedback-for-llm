@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Feedback for LLM",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "📝 Pick any element on a page, attach a remark, and export a markdown brief for your LLM coding agent. Ported from docs/brief/prototype/ annotation mode.",
   "permissions": [
     "storage",

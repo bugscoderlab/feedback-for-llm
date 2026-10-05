@@ -130,6 +130,12 @@ body.ffab-annotating * {
 
 /* ---------- fab ---------- */
 
+/* Sits at the very end of the rule set on purpose: every other element has an
+   ID-qualified hide rule (#ffab-highlight/.ffab-hidden, etc). Without this one,
+   adding the ffab-hidden class to the FAB is a no-op and the button stays on
+   screen permanently. */
+#ffab-fab.ffab-hidden { display: none; }
+
 #ffab-fab {
   position: fixed;
   right: 22px;
