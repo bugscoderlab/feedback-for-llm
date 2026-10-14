@@ -47,6 +47,20 @@
 
   const UI = ["ffab-highlight", "ffab-pop", "ffab-drawer", "ffab-fab", "ffab-markers", "ffab-marker"];
 
+  // Adopt a clean slate before injecting. Firefox injects content scripts into
+  // already-open tabs when the extension updates, and the previous instance's UI
+  // is still in the document. Left there, those older nodes answer getElementById
+  // first: this instance renders its drawer list into the OLD drawer, which keeps
+  // its old buttons and stays the only visible panel, while the new UI sits
+  // hidden behind it — unreachable until a page reload. So the user sees the
+  // previous release's buttons after every update. Drop the leftovers, rebuild.
+  document
+    .querySelectorAll(UI.map((id) => `#${id}`).join(", "))
+    .forEach((el) => el.remove());
+  // …and clear pick modes the old instance may have left armed on the body,
+  // which would otherwise strand the page in crosshair (or red) mode.
+  document.body?.classList.remove("ffab-annotating", "ffab-removing");
+
   const root = document.createElement("div");
   root.innerHTML = `
     <div id="ffab-highlight" class="ffab-hidden"></div>

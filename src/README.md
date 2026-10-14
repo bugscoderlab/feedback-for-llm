@@ -68,6 +68,11 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 ## Notes & limitations
 
 - Remarks are scoped per page (`origin + pathname`, query ignored).
+- Updating the extension takes effect in already-open tabs without a reload:
+  Firefox re-injects the content script on update, and the new instance discards
+  the previous instance's leftover UI before drawing its own (see the clean-slate
+  block in `content.js`). Without that, two drawers coexist invisibly and the
+  visible one keeps the old release's buttons.
 - Styles are `ffab-`-prefixed and injected via the manifest (CSP-exempt), but
   marker/popover *positioning* uses inline styles — on pages with a strict
   `style-src` CSP (no `'unsafe-inline'`), positioning may degrade. Dev servers
