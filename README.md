@@ -14,10 +14,12 @@ GitHub Releases.
   `browser.storage.local` (survive reloads and restarts).
 - **Drawer** — locate / resolve / reopen / delete remarks, unmark basketed elements,
   and accept a raw CSS selector from Firefox Inspect.
-- **📋 Copy brief / ⬇ feedback.md** — export a markdown brief in a fixed format
+- **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format
   (`[OPEN]` vs `RESOLVED`, plus a `## Remove these elements` hit-list), ready to paste
   into an LLM agent.
-- **Toolbar button** toggles the drawer and shows an open-remark badge count.
+- **Toolbar button** drops the on-page **📝 Feedback *n* pill** (and shows an
+  open-remark badge count); the drawer opens only from that pill, and the toolbar
+  button puts the pill — and everything with it — away again.
 
 ## Install
 

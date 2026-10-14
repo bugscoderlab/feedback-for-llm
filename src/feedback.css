@@ -237,13 +237,23 @@ body.ffab-removing #ffab-highlight {
   border-radius: 6px;
 }
 #ffab-drawer .ffab-x:hover { background: #f0f1f5; color: #1a2233; }
+#ffab-drawer .ffab-dr-pickers {
+  padding: 10px 16px 0;
+  display: flex;
+  gap: 8px;
+}
+#ffab-drawer .ffab-dr-pickers .ffab-btn {
+  flex: 1;
+  white-space: nowrap;
+}
 #ffab-drawer .ffab-dr-actions {
-  padding: 10px 16px;
+  padding: 9px 16px 10px;
   border-bottom: 1px solid #e3e6ec;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
+#ffab-dr-clear.ffab-hidden { display: none; }
 #ffab-drawer .ffab-dr-list {
   overflow: auto;
   padding: 10px 16px 16px;

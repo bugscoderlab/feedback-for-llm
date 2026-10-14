@@ -53,7 +53,13 @@
   // first: this instance renders its drawer list into the OLD drawer, which keeps
   // its old buttons and stays the only visible panel, while the new UI sits
   // hidden behind it — unreachable until a page reload. So the user sees the
-  // previous release's buttons after every update. Drop the leftovers, rebuild.
+  // previous release's buttons after every update. Drop the leftovers, rebuild,
+  // and reinstate whatever was open so the panel survives the update in place.
+  const prevDrawer = document.getElementById("ffab-drawer");
+  const prevFab = document.getElementById("ffab-fab");
+  const reopenDrawer = !!prevDrawer && !prevDrawer.classList.contains("ffab-hidden");
+  const reopenPill = reopenDrawer || (!!prevFab && !prevFab.classList.contains("ffab-hidden"));
+
   document
     .querySelectorAll(UI.map((id) => `#${id}`).join(", "))
     .forEach((el) => el.remove());
@@ -78,12 +84,14 @@
         <h3>📝 Feedback for LLM</h3>
         <span class="ffab-x" id="ffab-dr-close">✕</span>
       </div>
+      <div class="ffab-dr-pickers">
+        <button class="ffab-btn ffab-pick" id="ffab-dr-pick">🎯 Pick element</button>
+        <button class="ffab-btn ffab-del" id="ffab-dr-del">🚫 Remove element</button>
+      </div>
       <div class="ffab-dr-actions">
-        <button class="ffab-btn ffab-pick" id="ffab-dr-pick">🎯 Pick element on page</button>
-        <button class="ffab-btn ffab-del" id="ffab-dr-del">🚫 Remove element on page</button>
-        <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy brief</button>
+        <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
-        <button class="ffab-btn ffab-ghost" id="ffab-dr-clear">🗑 Clear all</button>
+        <button class="ffab-btn ffab-ghost ffab-hidden" id="ffab-dr-clear">🗑 Clear all</button>
       </div>
       <div class="ffab-dr-basket ffab-hidden" id="ffab-dr-basket"></div>
       <div class="ffab-dr-list" id="ffab-dr-list"></div>
@@ -135,11 +143,11 @@
     pick.classList.toggle("ffab-on", pickMode === "remark");
     del.classList.toggle("ffab-on", pickMode === "remove");
     pick.textContent =
-      pickMode === "remark" ? "🎯 Click an element… (Esc to cancel)" : "🎯 Pick element on page";
+      pickMode === "remark" ? "🎯 Click an element… (Esc to cancel)" : "🎯 Pick element";
     del.textContent =
       pickMode === "remove"
         ? "🚫 Click elements to remove… (Esc to finish)"
-        : "🚫 Remove element on page";
+        : "🚫 Remove element";
   }
 
   function inUI(node) {
@@ -397,6 +405,8 @@
     // drawer is hidden at that point, so it is the only running feedback.
     $("ffab-fab-label").textContent = removing ? "🚫 Remove" : "📝 Feedback";
     $("ffab-cnt").textContent = removing ? basket.length : open;
+    // Clear all is offered only when there is something to clear.
+    $("ffab-dr-clear").classList.toggle("ffab-hidden", !annotations.length && !basket.length);
     try {
       browser.runtime.sendMessage({ type: "ffab:badge", count: open });
     } catch {
@@ -425,7 +435,7 @@
       </div>`
           )
           .join("")
-      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element on page</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To delete elements instead, use <b>🚫 Remove element on page</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
+      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To delete elements instead, use <b>🚫 Remove element</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
 
     list.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", async () => {
@@ -502,21 +512,21 @@
     );
   }
 
-  /* ---------------- fab / drawer wiring ---------------- */
+  /* ---------------- pill / drawer wiring ---------------- */
 
-  // The FAB is not shown on page load — it appears only once the user opens the
-  // panel from the toolbar button (or the in-page button, when visible), and is
-  // hidden again when the panel closes. This keeps the host page clean.
+  // The toolbar button puts only the pill on the page; the drawer opens from the
+  // pill and from nowhere else. Both are gone on page load, so the host page is
+  // untouched until the reviewer asks for the pill.
   $("ffab-fab").addEventListener("click", () => {
-    // While picking, a FAB click means "cancel" rather than "toggle panel".
+    // While picking, a pill click means "cancel" rather than "toggle the drawer".
     if (pickMode) {
       stopPicking();
-      show($("ffab-drawer"));
+      setDrawerOpen(true);
       return;
     }
-    setPanelOpen(!isPanelOpen());
+    setDrawerOpen(!isDrawerOpen());
   });
-  $("ffab-dr-close").addEventListener("click", () => setPanelOpen(false));
+  $("ffab-dr-close").addEventListener("click", () => setDrawerOpen(false));
   $("ffab-dr-pick").addEventListener("click", () =>
     pickMode === "remark" ? stopPicking() : startPicking("remark")
   );
@@ -539,26 +549,39 @@
     openPopover(innerWidth / 2 - 170, innerHeight / 2 - 150);
   });
 
-  /** True when the feedback panel (drawer) is visible. */
-  function isPanelOpen() {
+  /** True when the drawer (the panel itself, not the pill) is visible. */
+  function isDrawerOpen() {
     return !$("ffab-drawer").classList.contains("ffab-hidden");
   }
 
-  /** Open/close the panel; the FAB visibility follows it. */
-  function setPanelOpen(open) {
+  /** Open/close the drawer alone — the pill stays put as the way back in. */
+  function setDrawerOpen(open) {
     if (open) {
       show($("ffab-drawer"));
-      show($("ffab-fab"));
+      show($("ffab-fab")); // the pill is the drawer's handle, so it is always there
     } else {
       hide($("ffab-drawer"));
-      hide($("ffab-fab"));
-      stopPicking(); // leaving the panel should never strand the picker armed
+      stopPicking(); // closing the drawer should never strand the picker armed
     }
   }
 
   browser.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "ffab:toggle") setPanelOpen(!isPanelOpen());
+    // Toolbar button: bring out the pill by itself, or put everything away.
+    if (msg.type === "ffab:toggle") {
+      if (isPillVisible()) {
+        setDrawerOpen(false);
+        hide($("ffab-fab"));
+      } else {
+        setDrawerOpen(false);
+        show($("ffab-fab"));
+      }
+    }
   });
+
+  /** True when the pill is on the page. */
+  function isPillVisible() {
+    return !$("ffab-fab").classList.contains("ffab-hidden");
+  }
 
   /* ---------------- brief export ---------------- */
 
@@ -642,6 +665,11 @@
   function escapeHtml(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
+
+  // Reinstate the surface the previous instance had open, so an update landing in
+  // an open tab swaps the buttons underneath the user instead of closing the panel.
+  if (reopenDrawer) setDrawerOpen(true);
+  else if (reopenPill) show($("ffab-fab"));
 
   load();
 })();
