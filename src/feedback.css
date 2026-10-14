@@ -126,6 +126,18 @@ body.ffab-stepping #ffab-highlight {
 .ffab-btn.ffab-del.ffab-on { background: #c02b2b; color: #ffffff; }
 .ffab-btn.ffab-step { background: #e6f6f4; color: #0f766e; }
 .ffab-btn.ffab-step.ffab-on { background: #0f766e; color: #ffffff; }
+/* An action's own report on the button that caused it — Copy says "✓ Copied"
+   here instead of putting a modal in front of the page. */
+.ffab-btn.ffab-flash-ok {
+  background: #e8f5ec;
+  border-color: #bfe3c9;
+  color: #15803d;
+}
+.ffab-btn.ffab-flash-bad {
+  background: #fdecec;
+  border-color: #f2cccc;
+  color: #c02b2b;
+}
 
 /* ---------- markers ---------- */
 

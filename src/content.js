@@ -25,10 +25,16 @@
   // numbered — step 2 is the second pick, so deleting one renumbers the rest.
   let steps = [];
   let review = "";
+  // Set as soon as the reviewer changes anything. A storage read that resolves
+  // after that must not lay the old record back on top of their change — which is
+  // how "cleared" steps come back when an extension update re-injects this script
+  // into an open tab and its load() lands while they are already clicking.
+  let dirty = false;
 
   async function load() {
     try {
       const raw = await browser.storage.local.get(storageKey);
+      if (dirty) return; // the reviewer got there first — their state wins
       const rec = raw[storageKey];
       annotations = rec?.annotations ?? [];
       basket = rec?.basket ?? [];
@@ -45,6 +51,7 @@
   }
 
   async function save() {
+    dirty = true;
     try {
       await browser.storage.local.set({
         [storageKey]: { annotations, seq, basket, steps, review },
@@ -784,22 +791,36 @@
 
   function copyFeedback() {
     const t = feedbackText();
-    const done = () => alert("Feedback brief copied — paste it to the LLM.");
+    // No dialog: the button that was clicked reports the result itself, so the
+    // page never gets a modal to dismiss and the reviewer keeps clicking.
+    const report = (ok) => flashButton($("ffab-dr-copy"), ok ? "✓ Copied" : "⚠ Copy failed", ok);
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(t).then(done, () => legacyCopy(t, done));
+      navigator.clipboard.writeText(t).then(() => report(true), () => report(legacyCopy(t)));
     } else {
-      legacyCopy(t, done);
+      report(legacyCopy(t));
     }
   }
 
-  function legacyCopy(text, done) {
+  /** Say what just happened on the button that caused it, then put its label back. */
+  function flashButton(btn, label, ok) {
+    if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+    btn.textContent = label;
+    btn.classList.add(ok ? "ffab-flash-ok" : "ffab-flash-bad");
+    clearTimeout(btn.__ffabFlash);
+    btn.__ffabFlash = setTimeout(() => {
+      btn.textContent = btn.dataset.label;
+      btn.classList.remove("ffab-flash-ok", "ffab-flash-bad");
+    }, 1600);
+  }
+
+  function legacyCopy(text) {
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.appendChild(ta);
     ta.select();
-    document.execCommand("copy");
+    const ok = document.execCommand("copy");
     ta.remove();
-    done();
+    return ok;
   }
 
   function downloadFeedback() {

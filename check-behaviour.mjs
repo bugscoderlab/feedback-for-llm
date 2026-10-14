@@ -86,6 +86,7 @@ const HARNESS_JS = `
     value: { writeText: (t) => { window.__export = t; return Promise.resolve(); } },
   });
   window.alert = (m) => { window.__alerts = (window.__alerts || []).concat(m); };
+  window.confirm = (m) => { window.__confirms = (window.__confirms || []).concat(m); return true; };
 </script>
 <script src="content.js"></script>
 <script>
@@ -178,6 +179,13 @@ const HARNESS_JS = `
     await sleep(60);
     const md = window.__export || "";
     check("export exists", !!md);
+    check("copy reports on its own button, not in a dialog",
+      (window.__alerts || []).length === 0, JSON.stringify(window.__alerts || []));
+    check("copy button says what happened",
+      $("ffab-dr-copy").textContent.indexOf("Copied") !== -1, $("ffab-dr-copy").textContent);
+    await sleep(1700);
+    check("copy button goes back to normal",
+      $("ffab-dr-copy").textContent === "📋 Copy", $("ffab-dr-copy").textContent);
     check("header counts the steps", md.indexOf("4 step(s) to reproduce") !== -1);
     check("steps block is headed", md.indexOf("## Steps to reproduce") !== -1);
     const where = WANT_STEPS.map((l) => md.indexOf(l));
@@ -197,6 +205,37 @@ const HARNESS_JS = `
       !!$("ffab-dr-steps") && $("ffab-dr-steps").textContent.indexOf("Steps to reproduce (4)") !== -1);
     check("re-inject restores the review", $("ffab-dr-review-note").value === REVIEW);
     check("re-inject leaves one drawer", document.querySelectorAll("#ffab-drawer").length === 1);
+
+    // 10. Clear all takes the walkthrough with it — steps, review, remarks, basket
+    const confirmCount = (window.__confirms || []).length;
+    click($("ffab-dr-clear"));
+    await sleep(50);
+    check("clear all asks first", (window.__confirms || []).length === confirmCount + 1);
+    check("clear all empties the stored steps", rec().steps.length === 0, JSON.stringify(rec().steps));
+    check("clear all empties the stored review", rec().review === "", JSON.stringify(rec().review));
+    check("clear all empties remarks and basket",
+      rec().annotations.length === 0 && rec().basket.length === 0);
+    check("clear all hides the steps section", $("ffab-dr-steps").classList.contains("ffab-hidden"));
+    check("clear all empties the steps list", $("ffab-dr-steps").innerHTML === "");
+    check("clear all empties the review box", $("ffab-dr-review-note").value === "");
+    check("clear all hides the review box", $("ffab-dr-review").classList.contains("ffab-hidden"));
+    check("clear all hides itself", $("ffab-dr-clear").classList.contains("ffab-hidden"));
+
+    // 11. the steps section's own clear drops the steps and nothing else
+    click($("ffab-dr-step"));
+    click($("add-user"));
+    click($("email"));
+    await sleep(30);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await sleep(30);
+    check("a second run records again", rec().steps.length === 2, JSON.stringify(rec().steps.length));
+    const stepClear = $("ffab-dr-steps").querySelector('[data-act="steps-clear"]');
+    check("the steps section offers its own clear", !!stepClear);
+    click(stepClear);
+    await sleep(30);
+    check("steps clear empties the steps", rec().steps.length === 0);
+    check("steps clear hides the section", $("ffab-dr-steps").classList.contains("ffab-hidden"));
+    check("steps clear empties the list", $("ffab-dr-steps").innerHTML === "");
 
     const out = document.createElement("pre");
     out.id = "result";

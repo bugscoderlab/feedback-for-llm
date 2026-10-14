@@ -60,7 +60,8 @@ agent as a markdown brief.
 
   Steps first, so the agent follows the journey before the requests; then act on OPEN
   remarks (RESOLVED ones are done). When elements were basketed, a
-  `## Remove these elements` block of selectors follows the remarks.
+  `## Remove these elements` block of selectors follows the remarks. Copy says so on
+  its own button (`✓ Copied`) — no dialog to dismiss.
 - **Toolbar button** drops the on-page **📝 Feedback *n* pill** and shows an
   open-remark badge count. The drawer opens only from the pill; clicking the toolbar
   button again takes the pill (and drawer) away, so a page stays clean until asked.
