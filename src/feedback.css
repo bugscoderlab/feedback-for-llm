@@ -126,6 +126,8 @@ body.ffab-stepping #ffab-highlight {
 .ffab-btn.ffab-del.ffab-on { background: #c02b2b; color: #ffffff; }
 .ffab-btn.ffab-step { background: #e6f6f4; color: #0f766e; }
 .ffab-btn.ffab-step.ffab-on { background: #0f766e; color: #ffffff; }
+/* Stands in for a confirm() dialog on Clear all — see the handler. */
+.ffab-btn.ffab-arm { background: #c02b2b; border-color: #c02b2b; color: #ffffff; }
 /* An action's own report on the button that caused it — Copy says "✓ Copied"
    here instead of putting a modal in front of the page. */
 .ffab-btn.ffab-flash-ok {

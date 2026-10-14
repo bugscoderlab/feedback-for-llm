@@ -30,28 +30,31 @@
   // how "cleared" steps come back when an extension update re-injects this script
   // into an open tab and its load() lands while they are already clicking.
   let dirty = false;
+  // …and the mirror of it: until the stored record has actually been read, the
+  // arrays in hand are empty, so writing them would wipe the reviewer's record.
+  let loaded = false;
 
   async function load() {
+    let rec = null;
     try {
       const raw = await browser.storage.local.get(storageKey);
-      if (dirty) return; // the reviewer got there first — their state wins
-      const rec = raw[storageKey];
-      annotations = rec?.annotations ?? [];
-      basket = rec?.basket ?? [];
-      steps = rec?.steps ?? [];
-      review = rec?.review ?? "";
-      seq = rec?.seq ?? annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
+      rec = raw[storageKey];
     } catch {
-      annotations = [];
-      basket = [];
-      steps = [];
-      review = "";
+      rec = null; // storage unavailable — nothing to restore
     }
+    loaded = true;
+    if (dirty) return; // the reviewer got there first — their state wins
+    annotations = rec?.annotations ?? [];
+    basket = rec?.basket ?? [];
+    steps = rec?.steps ?? [];
+    review = rec?.review ?? "";
+    seq = rec?.seq ?? annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
     render();
   }
 
   async function save() {
     dirty = true;
+    if (!loaded) return; // never write a record we have not read yet
     try {
       await browser.storage.local.set({
         [storageKey]: { annotations, seq, basket, steps, review },
@@ -474,22 +477,24 @@
 
   /** Clear all is offered only when there is something to clear. */
   function syncClearAll() {
-    $("ffab-dr-clear").classList.toggle(
-      "ffab-hidden",
-      !annotations.length && !basket.length && !steps.length && !review.trim()
-    );
+    const any = !!(annotations.length || basket.length || steps.length || review.trim());
+    if (!any) disarmClear(); // a hidden button must not come back armed
+    $("ffab-dr-clear").classList.toggle("ffab-hidden", !any);
   }
 
   /** Scroll an element into view and flash the highlight on it. */
-  function locate(selector) {
+  function locate(selector, btn) {
     let el = null;
     try {
       el = document.querySelector(selector);
     } catch {
-      /* fall through to the alert */
+      /* handled below — the selector no longer resolves */
     }
     if (!el) {
-      alert("Element not visible right now (view changed). The annotation is still saved.");
+      // The view changed under the annotation. Say so on the button that asked,
+      // for the same reason Copy does: a dialog here is one more modal, and a page
+      // that shows a few of them has its dialogs suppressed without a word.
+      if (btn) flashButton(btn, "⌖ not here", false);
       return;
     }
     el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -555,7 +560,7 @@
         if (b.dataset.act === "resolve")
           a.status = a.status === "resolved" ? "open" : "resolved";
         if (b.dataset.act === "locate") {
-          locate(a.selector);
+          locate(a.selector, b);
           return; // nothing changed — no save, no re-render
         }
         await save();
@@ -614,7 +619,7 @@
         if (b.dataset.act === "steps-clear") steps = [];
         else if (b.dataset.act === "step-del") steps.splice(+b.dataset.i, 1);
         else if (b.dataset.act === "step-locate") {
-          locate(steps[+b.dataset.i]?.selector);
+          locate(steps[+b.dataset.i]?.selector, b);
           return; // showing beats telling — nothing to save
         }
         await save();
@@ -834,22 +839,42 @@
 
   $("ffab-dr-copy").addEventListener("click", copyFeedback);
   $("ffab-dr-download").addEventListener("click", downloadFeedback);
+  // Clearing everything is destructive, but confirm() is the wrong tool for it:
+  // Firefox stops showing dialogs for a page that has already shown a few, and a
+  // suppressed confirm() returns false with nothing on screen to explain it — the
+  // button looks broken from then on. The alert that Copy used to raise was enough
+  // to get the page there. So the button asks in place instead: the first click
+  // arms it, the second clears, and it stands down on its own.
+  let clearArmed = false;
+  let clearArmTimer = null;
+
+  function disarmClear() {
+    clearArmed = false;
+    clearTimeout(clearArmTimer);
+    const btn = $("ffab-dr-clear");
+    btn.textContent = "🗑 Clear all";
+    btn.classList.remove("ffab-arm");
+  }
+
   $("ffab-dr-clear").addEventListener("click", async () => {
-    if (!annotations.length && !basket.length && !steps.length && !review.trim()) return;
-    const parts = [];
-    if (annotations.length) parts.push(`${annotations.length} remark(s)`);
-    if (steps.length) parts.push(`${steps.length} step(s)`);
-    if (basket.length) parts.push(`${basket.length} element(s) in the removal basket`);
-    if (review.trim()) parts.push("the review");
-    const what =
-      parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
-    if (!confirm(`Delete ${what}? This cannot be undone.`)) return;
+    const btn = $("ffab-dr-clear");
+    const empty = !annotations.length && !basket.length && !steps.length && !review.trim();
+    if (empty) return;
+    if (!clearArmed) {
+      clearArmed = true;
+      btn.textContent = "🗑 Sure? Click again";
+      btn.classList.add("ffab-arm");
+      clearTimeout(clearArmTimer);
+      clearArmTimer = setTimeout(disarmClear, 4000);
+      return;
+    }
     annotations = [];
     basket = [];
     steps = [];
     review = "";
     seq = 1;
     $("ffab-dr-review-note").value = "";
+    disarmClear();
     await save();
     render();
   });

@@ -32,7 +32,8 @@ agent as a markdown brief.
 - **Drawer** — every remark with *locate* (scrolls to the element and flashes
   it), *resolve/reopen*, and *delete*; every step with *locate* and *drop*.
   Footer accepts a raw CSS selector pasted from Firefox Inspect. **🗑 Clear all**
-  appears only when there is something to clear.
+  appears only when there is something to clear, and asks a second time on the button
+  itself rather than in a dialog.
 - **📋 Copy / ⬇ feedback.md** — exports exactly the prototype's format, with the
   walkthrough in front of it:
 
@@ -95,6 +96,11 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 ## Notes & limitations
 
 - Remarks are scoped per page (`origin + pathname`, query ignored).
+- **The extension raises no browser dialogs** — no `alert`, no `confirm`. Firefox
+  stops showing dialogs for a page that has already shown a few, and a suppressed
+  `confirm()` returns `false` with nothing on screen to explain it, so the button
+  reads as broken from then on. Copy, Clear all and a failed *locate* all report on
+  the button that was clicked instead. Keep it that way.
 - Updating the extension takes effect in already-open tabs without a reload:
   Firefox re-injects the content script on update, and the new instance discards
   the previous instance's leftover UI before drawing its own (see the clean-slate

@@ -206,11 +206,20 @@ const HARNESS_JS = `
     check("re-inject restores the review", $("ffab-dr-review-note").value === REVIEW);
     check("re-inject leaves one drawer", document.querySelectorAll("#ffab-drawer").length === 1);
 
-    // 10. Clear all takes the walkthrough with it — steps, review, remarks, basket
-    const confirmCount = (window.__confirms || []).length;
+    // 10. Clear all asks in place — two clicks, no dialog — then takes the
+    // walkthrough with it: steps, review, remarks, basket
+    const dialogsBefore = (window.__confirms || []).length;
     click($("ffab-dr-clear"));
     await sleep(50);
-    check("clear all asks first", (window.__confirms || []).length === confirmCount + 1);
+    check("first click arms instead of clearing",
+      rec().steps.length === 4 && $("ffab-dr-clear").textContent.indexOf("Sure") !== -1,
+      $("ffab-dr-clear").textContent);
+    check("clear all raises no dialog",
+      (window.__confirms || []).length === dialogsBefore && (window.__alerts || []).length === 0,
+      JSON.stringify([window.__confirms || [], window.__alerts || []]));
+    click($("ffab-dr-clear"));
+    await sleep(50);
+    check("second click clears", rec().steps.length === 0);
     check("clear all empties the stored steps", rec().steps.length === 0, JSON.stringify(rec().steps));
     check("clear all empties the stored review", rec().review === "", JSON.stringify(rec().review));
     check("clear all empties remarks and basket",
@@ -236,6 +245,32 @@ const HARNESS_JS = `
     check("steps clear empties the steps", rec().steps.length === 0);
     check("steps clear hides the section", $("ffab-dr-steps").classList.contains("ffab-hidden"));
     check("steps clear empties the list", $("ffab-dr-steps").innerHTML === "");
+
+    // 12. arming stands down on its own, and a stray click never clears
+    click($("ffab-dr-step"));
+    click($("add-user"));
+    await sleep(30);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await sleep(30);
+    check("a third run records again", rec().steps.length === 1);
+    click($("ffab-dr-clear"));
+    check("clear all arms", $("ffab-dr-clear").textContent.indexOf("Sure") !== -1,
+      $("ffab-dr-clear").textContent);
+    await sleep(4200);
+    check("arming stands down on its own",
+      $("ffab-dr-clear").textContent.indexOf("Clear all") !== -1 && !$("ffab-dr-clear").classList.contains("ffab-arm"),
+      $("ffab-dr-clear").textContent);
+    check("the armed click did not clear anything", rec().steps.length === 1);
+
+    // 13. locating something the view has moved on from reports on its own button
+    const alertCount = (window.__alerts || []).length;
+    $("add-user").remove();
+    const locateBtn = $("ffab-dr-steps").querySelector('[data-act="step-locate"]');
+    click(locateBtn);
+    await sleep(30);
+    check("a locate that fails says so on its button",
+      locateBtn.textContent.indexOf("not here") !== -1, locateBtn.textContent);
+    check("a locate that fails raises no dialog", (window.__alerts || []).length === alertCount);
 
     const out = document.createElement("pre");
     out.id = "result";
@@ -306,7 +341,7 @@ try {
       "--disable-gpu",
       "--no-sandbox",
       "--allow-file-access-from-files",
-      "--virtual-time-budget=15000",
+      "--virtual-time-budget=20000",
       "--dump-dom",
       `file://${join(dir, "index.html")}`,
     ],
