@@ -18,6 +18,13 @@ body.ffab-annotating * {
   cursor: crosshair !important;
 }
 
+/* Remove mode: the same crosshair, but the highlight reads red so you always
+   know a click baskets the element instead of opening the remark popover. */
+body.ffab-removing #ffab-highlight {
+  border-color: #c02b2b;
+  background: rgba(192, 43, 43, 0.1);
+}
+
 /* ---------- popover ---------- */
 
 #ffab-pop {
@@ -97,6 +104,8 @@ body.ffab-annotating * {
 .ffab-btn.ffab-ghost:hover { border-color: #c6ccd8; color: #1a2233; }
 .ffab-btn.ffab-pick { background: #eef0fe; color: #4f46e5; }
 .ffab-btn.ffab-pick.ffab-on { background: #4f46e5; color: #ffffff; }
+.ffab-btn.ffab-del { background: #fdecec; color: #c02b2b; }
+.ffab-btn.ffab-del.ffab-on { background: #c02b2b; color: #ffffff; }
 
 /* ---------- markers ---------- */
 
@@ -127,6 +136,18 @@ body.ffab-annotating * {
   box-sizing: border-box;
 }
 .ffab-marker.ffab-resolved { background: #9aa3b5; }
+.ffab-marker.ffab-marker-del {
+  background: #c02b2b;
+  min-width: 20px;
+  font-size: 12px;
+}
+.ffab-marker.ffab-marker-pop {
+  animation: ffab-marker-pop 0.4s ease-out;
+}
+@keyframes ffab-marker-pop {
+  from { transform: translate(50%, -50%) scale(1.9); }
+  to { transform: translate(50%, -50%) scale(1); }
+}
 
 /* ---------- fab ---------- */
 
@@ -237,6 +258,80 @@ body.ffab-annotating * {
   padding: 26px 10px;
   line-height: 1.6;
 }
+
+/* ---------- removal basket ---------- */
+
+#ffab-drawer .ffab-dr-basket {
+  border-bottom: 1px solid #e3e6ec;
+  background: #fdf7f7;
+  padding: 9px 16px 11px;
+  max-height: 200px;
+  overflow: auto;
+}
+#ffab-dr-basket.ffab-hidden { display: none; }
+#ffab-drawer .ffab-bk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+#ffab-drawer .ffab-bk-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #c02b2b;
+  flex: 1;
+}
+#ffab-drawer .ffab-bk-clear {
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: transparent;
+  color: #c02b2b;
+  border: 1px solid #f2cccc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#ffab-drawer .ffab-bk-clear:hover { background: #fdecec; }
+#ffab-drawer .ffab-bk-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+}
+#ffab-drawer .ffab-bk-row + .ffab-bk-row { border-top: 1px solid #f3e2e2; }
+#ffab-drawer .ffab-bk-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#ffab-drawer .ffab-bk-label {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #1a2233;
+}
+#ffab-drawer .ffab-bk-sel {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: #98a1b3;
+  word-break: break-all;
+}
+#ffab-drawer .ffab-bk-x {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 7px;
+  background: #ffffff;
+  color: #c02b2b;
+  border: 1px solid #f2cccc;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: none;
+}
+#ffab-drawer .ffab-bk-x:hover { background: #fdecec; }
 #ffab-drawer .ffab-dr-manual {
   padding: 10px 16px;
   border-top: 1px solid #e3e6ec;

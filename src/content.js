@@ -18,22 +18,26 @@
 
   let annotations = [];
   let seq = 1;
+  // elements flagged for removal — a plain hit-list, no note, no status
+  let basket = [];
 
   async function load() {
     try {
       const raw = await browser.storage.local.get(storageKey);
       const rec = raw[storageKey];
       annotations = rec?.annotations ?? [];
+      basket = rec?.basket ?? [];
       seq = rec?.seq ?? annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
     } catch {
       annotations = [];
+      basket = [];
     }
     render();
   }
 
   async function save() {
     try {
-      await browser.storage.local.set({ [storageKey]: { annotations, seq } });
+      await browser.storage.local.set({ [storageKey]: { annotations, seq, basket } });
     } catch {
       // storage full or unavailable — remarks still live for this session
     }
@@ -62,17 +66,19 @@
       </div>
       <div class="ffab-dr-actions">
         <button class="ffab-btn ffab-pick" id="ffab-dr-pick">🎯 Pick element on page</button>
+        <button class="ffab-btn ffab-del" id="ffab-dr-del">🚫 Remove element on page</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy brief</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-clear">🗑 Clear all</button>
       </div>
+      <div class="ffab-dr-basket ffab-hidden" id="ffab-dr-basket"></div>
       <div class="ffab-dr-list" id="ffab-dr-list"></div>
       <div class="ffab-dr-manual">
         <input id="ffab-dr-sel-input" placeholder="…or paste a CSS selector (from Firefox Inspect)">
         <button class="ffab-btn ffab-ghost" id="ffab-dr-sel-add">Attach</button>
       </div>
     </div>
-    <button id="ffab-fab" class="ffab-hidden" title="Feedback for LLM">📝 Feedback <span class="ffab-cnt" id="ffab-cnt">0</span></button>
+    <button id="ffab-fab" class="ffab-hidden" title="Feedback for LLM"><span id="ffab-fab-label">📝 Feedback</span> <span class="ffab-cnt" id="ffab-cnt">0</span></button>
     <div id="ffab-markers"></div>`;
   // the page's own styles can be hostile — move UI to the top layer one node at a time
   while (root.firstElementChild) document.documentElement.appendChild(root.firstElementChild);
@@ -83,28 +89,43 @@
 
   /* ---------------- picking ---------------- */
 
-  let picking = false;
+  let pickMode = null; // null | "remark" | "remove"
   let pendingTarget = null; // {selector, label, content, docCtx} while the popover is open
 
-  function startPicking() {
-    picking = true;
+  function startPicking(mode) {
+    pickMode = mode;
     document.body.classList.add("ffab-annotating");
+    if (mode === "remove") document.body.classList.add("ffab-removing");
     // Picking replaces the panel with a crosshair, but the FAB stays as the
     // only visible status indicator (it pulses in ffab-picking) and the way out.
     show($("ffab-fab"));
     $("ffab-fab").classList.add("ffab-picking");
-    $("ffab-dr-pick").classList.add("ffab-on");
-    $("ffab-dr-pick").textContent = "🎯 Click an element… (Esc to cancel)";
+    setPickButtons();
     hide($("ffab-drawer"));
+    render(); // flip the FAB into basket-counting mode for removal picking
   }
 
   function stopPicking() {
-    picking = false;
-    document.body.classList.remove("ffab-annotating");
+    pickMode = null;
+    document.body.classList.remove("ffab-annotating", "ffab-removing");
     $("ffab-fab").classList.remove("ffab-picking");
-    $("ffab-dr-pick").classList.remove("ffab-on");
-    $("ffab-dr-pick").textContent = "🎯 Pick element on page";
+    setPickButtons();
     hide($("ffab-highlight"));
+    render(); // restore the FAB from its removal-counting mode
+  }
+
+  /** Reflect the armed pick mode on both picker buttons (label + pressed style). */
+  function setPickButtons() {
+    const pick = $("ffab-dr-pick");
+    const del = $("ffab-dr-del");
+    pick.classList.toggle("ffab-on", pickMode === "remark");
+    del.classList.toggle("ffab-on", pickMode === "remove");
+    pick.textContent =
+      pickMode === "remark" ? "🎯 Click an element… (Esc to cancel)" : "🎯 Pick element on page";
+    del.textContent =
+      pickMode === "remove"
+        ? "🚫 Click elements to remove… (Esc to finish)"
+        : "🚫 Remove element on page";
   }
 
   function inUI(node) {
@@ -114,7 +135,7 @@
   document.addEventListener(
     "mousemove",
     (e) => {
-      if (!picking) return;
+      if (!pickMode) return;
       if (inUI(e.target)) {
         hide($("ffab-highlight"));
         return;
@@ -133,11 +154,17 @@
   document.addEventListener(
     "click",
     (e) => {
-      if (!picking) return;
+      if (!pickMode) return;
       if (inUI(e.target)) return; // let UI clicks through
       e.preventDefault();
       e.stopPropagation();
       const el = e.target;
+      if (pickMode === "remove") {
+        // Removal is a hit-list: no popover, no note, and the picker stays armed
+        // so a run of elements can be basketed in one pass.
+        addToBasket(el);
+        return;
+      }
       pendingTarget = { selector: buildSelector(el), ...describeElement(el) };
       stopPicking();
       openPopover(e.clientX, e.clientY);
@@ -147,10 +174,30 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (picking) stopPicking();
+      if (pickMode) stopPicking();
       closePopover();
     }
   });
+
+  /* ---------------- removal basket ---------------- */
+
+  async function addToBasket(el) {
+    const selector = buildSelector(el);
+    const already = basket.some((b) => b.selector === selector);
+    if (!already) {
+      basket.push({ selector, ...describeElement(el), at: new Date().toISOString() });
+      await save();
+    }
+    render();
+    // The drawer is hidden while picking, so the marker appearing on the element
+    // is the confirmation that it was basketed — and on a repeat pick the same
+    // marker pops again, so a duplicate click reads as "already in there".
+    const marker = [...$("ffab-markers").children].find((m) => m.dataset.sel === selector);
+    if (marker) {
+      marker.classList.add("ffab-marker-pop");
+      setTimeout(() => marker.classList.remove("ffab-marker-pop"), 400);
+    }
+  }
 
   /* ---------------- selector & description ---------------- */
 
@@ -291,6 +338,28 @@
       m.addEventListener("click", () => show($("ffab-drawer")));
       box.appendChild(m);
     });
+    // basket items get their own ✕ badge so marked-for-removal elements are
+    // readable at a glance, distinct from the numbered remark markers
+    basket.forEach((b) => {
+      let el = null;
+      try {
+        el = document.querySelector(b.selector);
+      } catch {
+        /* invalid selector — marker skipped */
+      }
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) return;
+      const m = document.createElement("div");
+      m.className = "ffab-marker ffab-marker-del";
+      m.textContent = "✕";
+      m.title = `Remove: ${b.label || b.selector}`;
+      m.dataset.sel = b.selector;
+      m.style.left = `${Math.min(r.right, innerWidth - 10)}px`;
+      m.style.top = `${Math.max(r.top, 14)}px`;
+      m.addEventListener("click", () => show($("ffab-drawer")));
+      box.appendChild(m);
+    });
   }
 
   let markersQueued = false;
@@ -308,8 +377,12 @@
   /* ---------------- drawer ---------------- */
 
   function render() {
+    const removing = pickMode === "remove";
     const open = annotations.filter((a) => a.status === "open").length;
-    $("ffab-cnt").textContent = open;
+    // While removal-picking, the FAB becomes the basket's live counter — the
+    // drawer is hidden at that point, so it is the only running feedback.
+    $("ffab-fab-label").textContent = removing ? "🚫 Remove" : "📝 Feedback";
+    $("ffab-cnt").textContent = removing ? basket.length : open;
     try {
       browser.runtime.sendMessage({ type: "ffab:badge", count: open });
     } catch {
@@ -338,7 +411,7 @@
       </div>`
           )
           .join("")
-      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element on page</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
+      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element on page</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To delete elements instead, use <b>🚫 Remove element on page</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
 
     list.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", async () => {
@@ -363,7 +436,7 @@
             h.style.height = `${r.height + 6}px`;
             show(h);
             setTimeout(() => {
-              if (!picking) hide(h);
+              if (!pickMode) hide(h);
             }, 1600);
           } else {
             alert("Element not visible right now (view changed). The remark is still saved.");
@@ -374,7 +447,45 @@
       })
     );
 
+    renderBasket();
+
     renderMarkers();
+  }
+
+  /** The removal basket: a compact hit-list above the remarks, no notes involved. */
+  function renderBasket() {
+    const box = $("ffab-dr-basket");
+    box.classList.toggle("ffab-hidden", !basket.length);
+    if (!basket.length) {
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML =
+      `<div class="ffab-bk-head">
+         <span class="ffab-bk-title">🚫 Remove these elements (${basket.length})</span>
+         <button class="ffab-bk-clear" data-act="basket-clear">clear</button>
+       </div>` +
+      basket
+        .map(
+          (b, i) => `
+      <div class="ffab-bk-row">
+        <div class="ffab-bk-main">
+          <span class="ffab-bk-label">${escapeHtml(b.label)}</span>
+          <span class="ffab-bk-sel">${escapeHtml(b.selector)}</span>
+        </div>
+        <button class="ffab-bk-x" data-act="basket-del" data-i="${i}" title="Remove from basket">✕</button>
+      </div>`
+        )
+        .join("");
+
+    box.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (b.dataset.act === "basket-clear") basket = [];
+        else basket.splice(+b.dataset.i, 1);
+        await save();
+        render();
+      })
+    );
   }
 
   /* ---------------- fab / drawer wiring ---------------- */
@@ -384,7 +495,7 @@
   // hidden again when the panel closes. This keeps the host page clean.
   $("ffab-fab").addEventListener("click", () => {
     // While picking, a FAB click means "cancel" rather than "toggle panel".
-    if (picking) {
+    if (pickMode) {
       stopPicking();
       show($("ffab-drawer"));
       return;
@@ -392,7 +503,12 @@
     setPanelOpen(!isPanelOpen());
   });
   $("ffab-dr-close").addEventListener("click", () => setPanelOpen(false));
-  $("ffab-dr-pick").addEventListener("click", () => (picking ? stopPicking() : startPicking()));
+  $("ffab-dr-pick").addEventListener("click", () =>
+    pickMode === "remark" ? stopPicking() : startPicking("remark")
+  );
+  $("ffab-dr-del").addEventListener("click", () =>
+    pickMode === "remove" ? stopPicking() : startPicking("remove")
+  );
   $("ffab-dr-sel-add").addEventListener("click", () => {
     const sel = $("ffab-dr-sel-input").value.trim();
     if (!sel) return;
@@ -437,7 +553,8 @@
     const L = [
       `# UI feedback — ${document.title || location.host}`,
       `Page: ${pageKey}`,
-      `Exported: ${new Date().toLocaleString()} · ${open.length} open remark(s), ${annotations.length} total`,
+      `Exported: ${new Date().toLocaleString()} · ${open.length} open remark(s), ${annotations.length} total` +
+        (basket.length ? ` · ${basket.length} element(s) to remove` : ""),
       "",
     ];
     if (!annotations.length) L.push("(no remarks)");
@@ -448,6 +565,13 @@
       if (a.content) L.push(`- Currently shows: "${a.content}"`);
       L.push("", "Requested change:", a.note, "");
     });
+    if (basket.length) {
+      L.push(`## Remove these elements`, "");
+      basket.forEach((b) => {
+        L.push(`- \`${b.selector}\`${b.label ? ` — ${b.label}` : ""}`);
+      });
+      L.push("");
+    }
     L.push(
       "---",
       "_Generated by the Feedback for LLM Firefox extension. Act on OPEN remarks; RESOLVED ones are done._"
@@ -487,9 +611,13 @@
   $("ffab-dr-copy").addEventListener("click", copyFeedback);
   $("ffab-dr-download").addEventListener("click", downloadFeedback);
   $("ffab-dr-clear").addEventListener("click", async () => {
-    if (!annotations.length) return;
-    if (!confirm(`Delete all ${annotations.length} remark(s)? This cannot be undone.`)) return;
+    if (!annotations.length && !basket.length) return;
+    const parts = [];
+    if (annotations.length) parts.push(`${annotations.length} remark(s)`);
+    if (basket.length) parts.push(`${basket.length} element(s) in the removal basket`);
+    if (!confirm(`Delete ${parts.join(" and ")}? This cannot be undone.`)) return;
     annotations = [];
+    basket = [];
     seq = 1;
     await save();
     render();

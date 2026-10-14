@@ -7,12 +7,16 @@ GitHub Releases.
 
 - **🎯 Pick element** — hover highlights, click opens the remark popover with a
   generated label, page context, and the element's CSS selector.
+- **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
+  and drop straight into a removal basket (red ✕ markers), one after another, until
+  you press Esc.
 - **💾 Save remarks** — numbered markers pin to elements, persist per page in
   `browser.storage.local` (survive reloads and restarts).
-- **Drawer** — locate / resolve / reopen / delete remarks; accept a raw CSS
-  selector from Firefox Inspect.
+- **Drawer** — locate / resolve / reopen / delete remarks, unmark basketed elements,
+  and accept a raw CSS selector from Firefox Inspect.
 - **📋 Copy brief / ⬇ feedback.md** — export a markdown brief in a fixed format
-  (`[OPEN]` vs `RESOLVED`), ready to paste into an LLM agent.
+  (`[OPEN]` vs `RESOLVED`, plus a `## Remove these elements` hit-list), ready to paste
+  into an LLM agent.
 - **Toolbar button** toggles the drawer and shows an open-remark badge count.
 
 ## Install
@@ -96,6 +100,7 @@ The workflow signs with AMO, publishes a GitHub Release, and refreshes
 - **Pages, not `raw.githubusercontent.com`** — raw serves `text/plain`; Pages
   serves `application/json` at a stable HTTPS URL.
 - **Lint locally with `--self-hosted`**, otherwise `addons-linter` errors on
-  `update_url`. Two `UNSAFE_VAR_ASSIGNMENT` warnings are known and harmless.
+  `update_url`. A few `UNSAFE_VAR_ASSIGNMENT` warnings are known and harmless: the
+  drawer's own markup is built with `innerHTML` from `escapeHtml`-ed values.
 - **`data_collection_permissions: { required: ["none"] }`** is injected at build
   time (AMO requires it). True here: remarks leave only via clipboard/download.

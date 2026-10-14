@@ -12,6 +12,12 @@ agent as a markdown brief.
   highlights the target; clicking opens the remark popover with a generated
   label ("button “Approve all pending”", "column header “Qty”", …), the page
   context, and the element's CSS selector.
+- **🚫 Remove element on page** — the same crosshair (the highlight turns red), but
+  each click skips the popover and drops the element straight into the **removal
+  basket**: no note to write, no per-element form. The picker stays armed so you can
+  basket a whole run of elements, and the FAB counts them as you go; Esc finishes.
+  Basket entries show as red ✕ markers and as their own list above the remarks, each
+  with an ✕ to unmark.
 - **💾 Save remark** — numbered markers pin to the elements; clicking a marker
   opens the drawer. Remarks persist per page in `browser.storage.local`
   (survive reloads and browser restarts).
@@ -33,7 +39,8 @@ agent as a markdown brief.
   make it a primary button
   ```
 
-  Act on OPEN remarks; RESOLVED ones are done.
+  Act on OPEN remarks; RESOLVED ones are done. When elements were basketed, a
+  `## Remove these elements` block of selectors follows the remarks.
 - **Toolbar button** toggles the drawer and shows an open-remark badge count.
 
 ## Install (dev)
@@ -54,7 +61,9 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 
 1. On any page, click **📝 Feedback** (bottom-right) or the toolbar button.
 2. **🎯 Pick element on page**, click the element, write the change, **💾 Save remark**.
-3. When done, **📋 Copy brief** and paste it to your LLM agent (or **⬇ feedback.md**).
+3. To delete elements instead, use **🚫 Remove element on page** and click each one
+   (no note needed), then Esc — they collect in the removal basket above the remarks.
+4. When done, **📋 Copy brief** and paste it to your LLM agent (or **⬇ feedback.md**).
 
 ## Notes & limitations
 
