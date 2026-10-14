@@ -19,19 +19,36 @@ agent as a markdown brief.
   Basket entries show as red ✕ markers and as their own list above the remarks, each
   with an ✕ to unmark.
   The two pickers sit side by side at the top of the drawer.
+- **🧭 Record steps** — the walkthrough: the run of clicks that got you to the
+  problem, which the popover's one-shot remarks can't express. The picker works the
+  same way (teal highlight, picks skip the popover), each click appends the next step,
+  and it stays armed so the whole run is one motion; the pill counts the steps as you
+  go. **Esc ends the run and opens the drawer to write your Review** — because the
+  point of stopping is having something to write down. Steps and review are positional
+  and persisted per page, so you can stop mid-run, reload, and pick it back up.
 - **💾 Save remark** — numbered markers pin to the elements; clicking a marker
   opens the drawer. Remarks persist per page in `browser.storage.local`
   (survive reloads and browser restarts).
 - **Drawer** — every remark with *locate* (scrolls to the element and flashes
-  it), *resolve/reopen*, and *delete*. Footer accepts a raw CSS selector
-  pasted from Firefox Inspect. **🗑 Clear all** appears only when there is
-  something to clear.
-- **📋 Copy / ⬇ feedback.md** — exports exactly the prototype's format:
+  it), *resolve/reopen*, and *delete*; every step with *locate* and *drop*.
+  Footer accepts a raw CSS selector pasted from Firefox Inspect. **🗑 Clear all**
+  appears only when there is something to clear.
+- **📋 Copy / ⬇ feedback.md** — exports exactly the prototype's format, with the
+  walkthrough in front of it:
 
   ```markdown
   # UI feedback — <page title>
   Page: <origin + path>
-  Exported: … · 2 open remark(s), 3 total
+  Exported: … · 2 open remark(s), 3 total · 3 step(s) to reproduce
+
+  ## Steps to reproduce
+
+  1. button "Add user" — `#add-user`
+  2. input "Email" — `.modal form > input:nth-of-type(2)`
+  3. button "Save" — `.modal footer > button`
+
+  Review:
+  <what you did, what you expected, what happened>
 
   ## 1. [OPEN] button "Approve all pending"
   - Where: … · localhost:3000/
@@ -41,7 +58,8 @@ agent as a markdown brief.
   make it a primary button
   ```
 
-  Act on OPEN remarks; RESOLVED ones are done. When elements were basketed, a
+  Steps first, so the agent follows the journey before the requests; then act on OPEN
+  remarks (RESOLVED ones are done). When elements were basketed, a
   `## Remove these elements` block of selectors follows the remarks.
 - **Toolbar button** drops the on-page **📝 Feedback *n* pill** and shows an
   open-remark badge count. The drawer opens only from the pill; clicking the toolbar
@@ -66,9 +84,12 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 1. On any page, click the toolbar button — the **📝 Feedback *n*** pill drops into
    the bottom-right corner. Click the pill to open the drawer.
 2. **🎯 Pick element**, click the element, write the change, **💾 Save remark**.
-3. To delete elements instead, use **🚫 Remove element** and click each one
+3. To explain how you got there instead, **🧭 Record steps** and click the elements in
+   order — then Esc and write your **Review**. Steps and review persist per page, so you
+   can stop mid-run and pick it back up later.
+4. To delete elements, use **🚫 Remove element** and click each one
    (no note needed), then Esc — they collect in the removal basket above the remarks.
-4. When done, **📋 Copy brief** and paste it to your LLM agent (or **⬇ feedback.md**).
+5. When done, **📋 Copy brief** and paste it to your LLM agent (or **⬇ feedback.md**).
 
 ## Notes & limitations
 
@@ -90,6 +111,6 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 | --- | --- |
 | `manifest.json` | MV2 manifest: content script on all URLs, storage, background |
 | `background.js` | Toolbar click → toggle drawer; open-remark badge |
-| `content.js` | Picking, selectors, descriptions, popover, drawer, markers, export |
+| `content.js` | Picking (remark / remove / step), selectors, descriptions, popover, drawer, markers, export |
 | `feedback.css` | Prototype-styled UI, `ffab-`-prefixed |
 | `icons/` | Extension icons (generated, see `tools/gen-icons.js`) |

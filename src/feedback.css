@@ -25,6 +25,24 @@ body.ffab-removing #ffab-highlight {
   background: rgba(192, 43, 43, 0.1);
 }
 
+/* Step mode: the same crosshair again, teal, so a click appends a step to the
+   walkthrough rather than opening the popover or basketing the element. */
+body.ffab-stepping #ffab-highlight {
+  border-color: #0f766e;
+  background: rgba(15, 118, 110, 0.1);
+}
+
+/* A step landed. The highlight is already sitting on the hovered element, so
+   without this the pick that registers is indistinguishable from the ones that
+   haven't happened yet. */
+#ffab-highlight.ffab-flash {
+  animation: ffab-flash 0.4s ease-out;
+}
+@keyframes ffab-flash {
+  from { box-shadow: 0 0 0 6px rgba(15, 118, 110, 0.35); }
+  to { box-shadow: 0 0 0 0 rgba(15, 118, 110, 0); }
+}
+
 /* ---------- popover ---------- */
 
 #ffab-pop {
@@ -106,6 +124,8 @@ body.ffab-removing #ffab-highlight {
 .ffab-btn.ffab-pick.ffab-on { background: #4f46e5; color: #ffffff; }
 .ffab-btn.ffab-del { background: #fdecec; color: #c02b2b; }
 .ffab-btn.ffab-del.ffab-on { background: #c02b2b; color: #ffffff; }
+.ffab-btn.ffab-step { background: #e6f6f4; color: #0f766e; }
+.ffab-btn.ffab-step.ffab-on { background: #0f766e; color: #ffffff; }
 
 /* ---------- markers ---------- */
 
@@ -246,6 +266,14 @@ body.ffab-removing #ffab-highlight {
   flex: 1;
   white-space: nowrap;
 }
+/* The walkthrough gets a row of its own: three nowrap buttons on one 380px row
+   would squeeze the two existing pickers into unreadable stubs. */
+#ffab-drawer .ffab-dr-walk {
+  padding: 8px 16px 0;
+}
+#ffab-drawer .ffab-dr-walk .ffab-btn {
+  width: 100%;
+}
 #ffab-drawer .ffab-dr-actions {
   padding: 9px 16px 10px;
   border-bottom: 1px solid #e3e6ec;
@@ -260,6 +288,31 @@ body.ffab-removing #ffab-highlight {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+/* The drawer is a fixed-height flex column, so once steps + review + basket +
+   remarks are all present there is more content than room. Everyone shrinking
+   equally slices the middle blocks into slivers — freeze the chrome and the box
+   that is being typed into, and let the lists share what is left, each keeping a
+   couple of rows and scrolling internally. */
+#ffab-drawer .ffab-dr-head,
+#ffab-drawer .ffab-dr-pickers,
+#ffab-drawer .ffab-dr-walk,
+#ffab-drawer .ffab-dr-actions,
+#ffab-drawer .ffab-dr-review,
+#ffab-drawer .ffab-dr-manual {
+  flex: none;
+}
+#ffab-drawer .ffab-dr-steps,
+#ffab-drawer .ffab-dr-basket {
+  flex: 0 1 auto;
+  min-height: 58px;
+}
+#ffab-drawer .ffab-dr-steps {
+  min-height: 88px; /* head + two steps — the rest scrolls */
+}
+#ffab-drawer .ffab-dr-list {
+  flex: 1 1 auto;
+  min-height: 64px;
 }
 #ffab-drawer .ffab-dr-empty {
   color: #98a1b3;
@@ -342,6 +395,94 @@ body.ffab-removing #ffab-highlight {
   flex: none;
 }
 #ffab-drawer .ffab-bk-x:hover { background: #fdecec; }
+
+/* ---------- walkthrough (steps + review) ---------- */
+
+/* The ordered run of picks. Structurally the same list as the removal basket
+   above — same row classes — so it only re-tints what the basket already
+   styles, teal where the basket is red. */
+#ffab-drawer .ffab-dr-steps {
+  border-bottom: 1px solid #e3e6ec;
+  background: #f5fbfa;
+  padding: 9px 16px 11px;
+  max-height: 200px;
+  overflow: auto;
+}
+#ffab-dr-steps.ffab-hidden { display: none; }
+#ffab-drawer .ffab-st-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+#ffab-drawer .ffab-st-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0f766e;
+  flex: 1;
+}
+#ffab-drawer .ffab-st-clear {
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: transparent;
+  color: #0f766e;
+  border: 1px solid #cfe9e5;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#ffab-drawer .ffab-st-clear:hover { background: #e6f6f4; }
+#ffab-drawer .ffab-st-n {
+  background: #0f766e;
+  color: #ffffff;
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  flex: none;
+  margin-top: 1px;
+}
+#ffab-drawer .ffab-dr-steps .ffab-bk-row + .ffab-bk-row { border-top-color: #dcefec; }
+/* …including the row buttons, which the basket styles red. */
+#ffab-drawer .ffab-dr-steps .ffab-bk-x {
+  background: #ffffff;
+  color: #0f766e;
+  border-color: #cfe9e5;
+}
+#ffab-drawer .ffab-dr-steps .ffab-bk-x:hover { background: #e6f6f4; }
+
+/* The words on the walkthrough, right under the steps they describe. */
+#ffab-drawer .ffab-dr-review {
+  border-bottom: 1px solid #e3e6ec;
+  padding: 9px 16px 11px;
+}
+#ffab-dr-review.ffab-hidden { display: none; }
+#ffab-drawer .ffab-dr-review .ffab-rv-head {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0f766e;
+  margin-bottom: 6px;
+}
+#ffab-drawer .ffab-dr-review textarea {
+  width: 100%;
+  min-height: 64px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 8px;
+  border: 1px solid #e3e6ec;
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+  color: #1a2233;
+}
+#ffab-drawer .ffab-dr-review textarea:focus {
+  outline: 2px solid #eef0fe;
+  border-color: #0f766e;
+}
 #ffab-drawer .ffab-dr-manual {
   padding: 10px 16px;
   border-top: 1px solid #e3e6ec;

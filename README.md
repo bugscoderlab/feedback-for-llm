@@ -10,13 +10,17 @@ GitHub Releases.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
   and drop straight into a removal basket (red ✕ markers), one after another, until
   you press Esc.
+- **🧭 Record steps** — the run that led to the problem: click element after element
+  and each pick appends the next step, in order, the picker staying armed so the whole
+  walkthrough is one motion. Esc ends it and opens the drawer to write your **Review**.
+  Stop mid-run and resume whenever — steps and review persist per page.
 - **💾 Save remarks** — numbered markers pin to elements, persist per page in
   `browser.storage.local` (survive reloads and restarts).
 - **Drawer** — locate / resolve / reopen / delete remarks, unmark basketed elements,
-  and accept a raw CSS selector from Firefox Inspect.
-- **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format
-  (`[OPEN]` vs `RESOLVED`, plus a `## Remove these elements` hit-list), ready to paste
-  into an LLM agent.
+  locate or drop individual steps, and accept a raw CSS selector from Firefox Inspect.
+- **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format: a
+  `## Steps to reproduce` walkthrough and its review, then the remarks
+  (`[OPEN]` vs `RESOLVED`), then the `## Remove these elements` hit-list.
 - **Toolbar button** drops the on-page **📝 Feedback *n* pill** (and shows an
   open-remark badge count); the drawer opens only from that pill, and the toolbar
   button puts the pill — and everything with it — away again.

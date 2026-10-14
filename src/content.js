@@ -20,6 +20,11 @@
   let seq = 1;
   // elements flagged for removal — a plain hit-list, no note, no status
   let basket = [];
+  // the walkthrough: the ordered run of elements the reviewer clicked through to
+  // reach the problem, plus the prose that explains it. Positional rather than
+  // numbered — step 2 is the second pick, so deleting one renumbers the rest.
+  let steps = [];
+  let review = "";
 
   async function load() {
     try {
@@ -27,17 +32,23 @@
       const rec = raw[storageKey];
       annotations = rec?.annotations ?? [];
       basket = rec?.basket ?? [];
+      steps = rec?.steps ?? [];
+      review = rec?.review ?? "";
       seq = rec?.seq ?? annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
     } catch {
       annotations = [];
       basket = [];
+      steps = [];
+      review = "";
     }
     render();
   }
 
   async function save() {
     try {
-      await browser.storage.local.set({ [storageKey]: { annotations, seq, basket } });
+      await browser.storage.local.set({
+        [storageKey]: { annotations, seq, basket, steps, review },
+      });
     } catch {
       // storage full or unavailable — remarks still live for this session
     }
@@ -45,7 +56,16 @@
 
   /* ---------------- injected UI ---------------- */
 
-  const UI = ["ffab-highlight", "ffab-pop", "ffab-drawer", "ffab-fab", "ffab-markers", "ffab-marker"];
+  const UI = [
+    "ffab-highlight",
+    "ffab-pop",
+    "ffab-drawer",
+    "ffab-fab",
+    "ffab-markers",
+    "ffab-marker",
+    "ffab-dr-steps",
+    "ffab-dr-review",
+  ];
 
   // Adopt a clean slate before injecting. Firefox injects content scripts into
   // already-open tabs when the extension updates, and the previous instance's UI
@@ -64,8 +84,8 @@
     .querySelectorAll(UI.map((id) => `#${id}`).join(", "))
     .forEach((el) => el.remove());
   // …and clear pick modes the old instance may have left armed on the body,
-  // which would otherwise strand the page in crosshair (or red) mode.
-  document.body?.classList.remove("ffab-annotating", "ffab-removing");
+  // which would otherwise strand the page in crosshair (or red/teal) mode.
+  document.body?.classList.remove("ffab-annotating", "ffab-removing", "ffab-stepping");
 
   const root = document.createElement("div");
   root.innerHTML = `
@@ -88,10 +108,18 @@
         <button class="ffab-btn ffab-pick" id="ffab-dr-pick">🎯 Pick element</button>
         <button class="ffab-btn ffab-del" id="ffab-dr-del">🚫 Remove element</button>
       </div>
+      <div class="ffab-dr-walk">
+        <button class="ffab-btn ffab-step" id="ffab-dr-step">🧭 Record steps</button>
+      </div>
       <div class="ffab-dr-actions">
         <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
         <button class="ffab-btn ffab-ghost ffab-hidden" id="ffab-dr-clear">🗑 Clear all</button>
+      </div>
+      <div class="ffab-dr-steps ffab-hidden" id="ffab-dr-steps"></div>
+      <div class="ffab-dr-review ffab-hidden" id="ffab-dr-review">
+        <div class="ffab-rv-head">Review</div>
+        <textarea id="ffab-dr-review-note" placeholder="What you were doing, what you expected, what happened — the agent reads this above your remarks."></textarea>
       </div>
       <div class="ffab-dr-basket ffab-hidden" id="ffab-dr-basket"></div>
       <div class="ffab-dr-list" id="ffab-dr-list"></div>
@@ -111,43 +139,51 @@
 
   /* ---------------- picking ---------------- */
 
-  let pickMode = null; // null | "remark" | "remove"
+  let pickMode = null; // null | "remark" | "remove" | "step"
   let pendingTarget = null; // {selector, label, content, docCtx} while the popover is open
 
   function startPicking(mode) {
     pickMode = mode;
     document.body.classList.add("ffab-annotating");
     if (mode === "remove") document.body.classList.add("ffab-removing");
+    if (mode === "step") document.body.classList.add("ffab-stepping");
     // Picking replaces the panel with a crosshair, but the FAB stays as the
-    // only visible status indicator (it pulses in ffab-picking) and the way out.
+    // only visible status indicator (it pulses in ffab-picking, and counts the
+    // run in step mode) and the way out.
     show($("ffab-fab"));
     $("ffab-fab").classList.add("ffab-picking");
     setPickButtons();
     hide($("ffab-drawer"));
-    render(); // flip the FAB into basket-counting mode for removal picking
+    render(); // flip the FAB into basket-/step-counting mode
   }
 
   function stopPicking() {
     pickMode = null;
-    document.body.classList.remove("ffab-annotating", "ffab-removing");
+    document.body.classList.remove("ffab-annotating", "ffab-removing", "ffab-stepping");
     $("ffab-fab").classList.remove("ffab-picking");
     setPickButtons();
     hide($("ffab-highlight"));
     render(); // restore the FAB from its removal-counting mode
   }
 
-  /** Reflect the armed pick mode on both picker buttons (label + pressed style). */
+  /** Reflect the armed pick mode on all three picker buttons (label + pressed style). */
   function setPickButtons() {
     const pick = $("ffab-dr-pick");
     const del = $("ffab-dr-del");
+    const step = $("ffab-dr-step");
     pick.classList.toggle("ffab-on", pickMode === "remark");
     del.classList.toggle("ffab-on", pickMode === "remove");
+    step.classList.toggle("ffab-on", pickMode === "step");
     pick.textContent =
       pickMode === "remark" ? "🎯 Click an element… (Esc to cancel)" : "🎯 Pick element";
     del.textContent =
       pickMode === "remove"
         ? "🚫 Click elements to remove… (Esc to finish)"
         : "🚫 Remove element";
+    step.textContent =
+      pickMode === "step"
+        ? "🧭 Click each step… (Esc to write it down)"
+        : "🧭 Record steps";
   }
 
   function inUI(node) {
@@ -187,6 +223,12 @@
         addToBasket(el);
         return;
       }
+      if (pickMode === "step") {
+        // Same idea for the walkthrough: each click appends the next step and the
+        // picker stays armed, so a run is picked in one motion and Esc ends it.
+        addStep(el);
+        return;
+      }
       pendingTarget = { selector: buildSelector(el), ...describeElement(el) };
       stopPicking();
       openPopover(e.clientX, e.clientY);
@@ -196,6 +238,14 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      // A finished run is followed by writing, so Esc puts the drawer — and the
+      // review box under the steps — in front of the reviewer instead of leaving
+      // them on the bare crosshair with the pill as the only way back.
+      if (pickMode === "step") {
+        stopPicking();
+        setDrawerOpen(true);
+        return;
+      }
       if (pickMode) stopPicking();
       closePopover();
     }
@@ -219,6 +269,23 @@
       marker.classList.add("ffab-marker-pop");
       setTimeout(() => marker.classList.remove("ffab-marker-pop"), 400);
     }
+  }
+
+  /* ---------------- walkthrough steps ---------------- */
+
+  async function addStep(el) {
+    steps.push({ selector: buildSelector(el), ...describeElement(el), at: new Date().toISOString() });
+    await save();
+    render();
+    // The drawer is hidden while picking, so the FAB counter ticking up is the
+    // confirmation that a pick landed; the highlight pulses once too, so a step
+    // taken on the element the cursor is already resting on still reads as
+    // registered rather than as a click that went nowhere.
+    const h = $("ffab-highlight");
+    h.classList.remove("ffab-flash");
+    void h.offsetWidth; // restart the animation for a back-to-back pick
+    h.classList.add("ffab-flash");
+    setTimeout(() => h.classList.remove("ffab-flash"), 400);
   }
 
   /* ---------------- selector & description ---------------- */
@@ -398,15 +465,52 @@
 
   /* ---------------- drawer ---------------- */
 
+  /** Clear all is offered only when there is something to clear. */
+  function syncClearAll() {
+    $("ffab-dr-clear").classList.toggle(
+      "ffab-hidden",
+      !annotations.length && !basket.length && !steps.length && !review.trim()
+    );
+  }
+
+  /** Scroll an element into view and flash the highlight on it. */
+  function locate(selector) {
+    let el = null;
+    try {
+      el = document.querySelector(selector);
+    } catch {
+      /* fall through to the alert */
+    }
+    if (!el) {
+      alert("Element not visible right now (view changed). The annotation is still saved.");
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const r = el.getBoundingClientRect();
+    const h = $("ffab-highlight");
+    h.style.left = `${r.left - 3}px`;
+    h.style.top = `${r.top - 3}px`;
+    h.style.width = `${r.width + 6}px`;
+    h.style.height = `${r.height + 6}px`;
+    show(h);
+    setTimeout(() => {
+      if (!pickMode) hide(h);
+    }, 1600);
+  }
+
   function render() {
     const removing = pickMode === "remove";
+    const stepping = pickMode === "step";
     const open = annotations.filter((a) => a.status === "open").length;
-    // While removal-picking, the FAB becomes the basket's live counter — the
+    // While removal-/step-picking, the FAB becomes that run's live counter — the
     // drawer is hidden at that point, so it is the only running feedback.
-    $("ffab-fab-label").textContent = removing ? "🚫 Remove" : "📝 Feedback";
-    $("ffab-cnt").textContent = removing ? basket.length : open;
-    // Clear all is offered only when there is something to clear.
-    $("ffab-dr-clear").classList.toggle("ffab-hidden", !annotations.length && !basket.length);
+    $("ffab-fab-label").textContent = removing
+      ? "🚫 Remove"
+      : stepping
+        ? "🧭 Steps"
+        : "📝 Feedback";
+    $("ffab-cnt").textContent = removing ? basket.length : stepping ? steps.length : open;
+    syncClearAll();
     try {
       browser.runtime.sendMessage({ type: "ffab:badge", count: open });
     } catch {
@@ -435,7 +539,7 @@
       </div>`
           )
           .join("")
-      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To delete elements instead, use <b>🚫 Remove element</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
+      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To explain the run that got you here, use <b>🧭 Record steps</b> — click element after element, then Esc and write your review.<br><br>To delete elements instead, use <b>🚫 Remove element</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
 
     list.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", async () => {
@@ -444,36 +548,72 @@
         if (b.dataset.act === "resolve")
           a.status = a.status === "resolved" ? "open" : "resolved";
         if (b.dataset.act === "locate") {
-          let el = null;
-          try {
-            el = document.querySelector(a.selector);
-          } catch {
-            /* fall through to the alert */
-          }
-          if (el) {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
-            const r = el.getBoundingClientRect();
-            const h = $("ffab-highlight");
-            h.style.left = `${r.left - 3}px`;
-            h.style.top = `${r.top - 3}px`;
-            h.style.width = `${r.width + 6}px`;
-            h.style.height = `${r.height + 6}px`;
-            show(h);
-            setTimeout(() => {
-              if (!pickMode) hide(h);
-            }, 1600);
-          } else {
-            alert("Element not visible right now (view changed). The remark is still saved.");
-          }
+          locate(a.selector);
+          return; // nothing changed — no save, no re-render
         }
         await save();
         render();
       })
     );
 
+    renderSteps();
     renderBasket();
 
     renderMarkers();
+  }
+
+  /**
+   * The walkthrough: the ordered run of picks, with the review box that explains
+   * it right underneath. Rows reuse the basket's row classes — the two lists are
+   * structurally the same thing, one red and one teal.
+   */
+  function renderSteps() {
+    const box = $("ffab-dr-steps");
+    const has = !!steps.length;
+    box.classList.toggle("ffab-hidden", !has);
+    // The review box is static markup, so typing in it survives a re-render —
+    // never overwrite it while the reviewer is in it. It stays visible when steps
+    // were cleared but words are still there, so nothing can be lost out of sight.
+    $("ffab-dr-review").classList.toggle("ffab-hidden", !has && !review.trim());
+    const ta = $("ffab-dr-review-note");
+    if (document.activeElement !== ta && ta.value !== review) ta.value = review;
+
+    if (!has) {
+      box.innerHTML = "";
+      return;
+    }
+    box.innerHTML =
+      `<div class="ffab-st-head">
+         <span class="ffab-st-title">🧭 Steps to reproduce (${steps.length})</span>
+         <button class="ffab-st-clear" data-act="steps-clear">clear</button>
+       </div>` +
+      steps
+        .map(
+          (s, i) => `
+      <div class="ffab-bk-row">
+        <span class="ffab-st-n">${i + 1}</span>
+        <div class="ffab-bk-main">
+          <span class="ffab-bk-label">${escapeHtml(s.label)}</span>
+          <span class="ffab-bk-sel">${escapeHtml(s.selector)}</span>
+        </div>
+        <button class="ffab-bk-x" data-act="step-locate" data-i="${i}" title="Show me">⌖</button>
+        <button class="ffab-bk-x" data-act="step-del" data-i="${i}" title="Remove step">✕</button>
+      </div>`
+        )
+        .join("");
+
+    box.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (b.dataset.act === "steps-clear") steps = [];
+        else if (b.dataset.act === "step-del") steps.splice(+b.dataset.i, 1);
+        else if (b.dataset.act === "step-locate") {
+          locate(steps[+b.dataset.i]?.selector);
+          return; // showing beats telling — nothing to save
+        }
+        await save();
+        render();
+      })
+    );
   }
 
   /** The removal basket: a compact hit-list above the remarks, no notes involved. */
@@ -533,6 +673,23 @@
   $("ffab-dr-del").addEventListener("click", () =>
     pickMode === "remove" ? stopPicking() : startPicking("remove")
   );
+  $("ffab-dr-step").addEventListener("click", () =>
+    pickMode === "step" ? stopPicking() : startPicking("step")
+  );
+  // The review is typed straight into the static box: the words live in `review`
+  // as they are typed (so Copy/export is never stale), and persistence is
+  // debounced so a sentence is not one storage write per keystroke.
+  let reviewSaveTimer = null;
+  $("ffab-dr-review-note").addEventListener("input", (e) => {
+    review = e.target.value;
+    syncClearAll();
+    clearTimeout(reviewSaveTimer);
+    reviewSaveTimer = setTimeout(save, 300);
+  });
+  $("ffab-dr-review-note").addEventListener("blur", () => {
+    clearTimeout(reviewSaveTimer);
+    save();
+  });
   $("ffab-dr-sel-add").addEventListener("click", () => {
     const sel = $("ffab-dr-sel-input").value.trim();
     if (!sel) return;
@@ -591,9 +748,18 @@
       `# UI feedback — ${document.title || location.host}`,
       `Page: ${pageKey}`,
       `Exported: ${new Date().toLocaleString()} · ${open.length} open remark(s), ${annotations.length} total` +
+        (steps.length ? ` · ${steps.length} step(s) to reproduce` : "") +
         (basket.length ? ` · ${basket.length} element(s) to remove` : ""),
       "",
     ];
+    // The run that got the reviewer here comes first, so the agent reads the
+    // journey before the individual requests.
+    if (steps.length) {
+      L.push(`## Steps to reproduce`, "");
+      steps.forEach((s, i) => L.push(`${i + 1}. ${s.label} — \`${s.selector}\``));
+      L.push("");
+      if (review.trim()) L.push("Review:", review.trim(), "");
+    }
     if (!annotations.length) L.push("(no remarks)");
     annotations.forEach((a) => {
       L.push(`## ${a.num}. [${a.status.toUpperCase()}] ${a.label}`);
@@ -648,14 +814,21 @@
   $("ffab-dr-copy").addEventListener("click", copyFeedback);
   $("ffab-dr-download").addEventListener("click", downloadFeedback);
   $("ffab-dr-clear").addEventListener("click", async () => {
-    if (!annotations.length && !basket.length) return;
+    if (!annotations.length && !basket.length && !steps.length && !review.trim()) return;
     const parts = [];
     if (annotations.length) parts.push(`${annotations.length} remark(s)`);
+    if (steps.length) parts.push(`${steps.length} step(s)`);
     if (basket.length) parts.push(`${basket.length} element(s) in the removal basket`);
-    if (!confirm(`Delete ${parts.join(" and ")}? This cannot be undone.`)) return;
+    if (review.trim()) parts.push("the review");
+    const what =
+      parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+    if (!confirm(`Delete ${what}? This cannot be undone.`)) return;
     annotations = [];
     basket = [];
+    steps = [];
+    review = "";
     seq = 1;
+    $("ffab-dr-review-note").value = "";
     await save();
     render();
   });
