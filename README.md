@@ -63,6 +63,8 @@ there. Both happen to be hosted here.
 | `src/` | The extension source (edit this) |
 | `release.config.json` | Repo, add-on id, channel, published `updateUrl` |
 | `build.mjs` | Assemble `dist/`, overlay the release manifest, zip |
+| `check-hidden.mjs` | Fail on a "hidden" class no CSS rule hides |
+| `check-behaviour.mjs` | Drive `src/content.js` in headless Chrome and assert the flows |
 | `gen-updates.mjs` | Rewrite `updates.json`, stage the `gh-pages` payload |
 | `updates.json` | Seed manifest (the live copy is on `gh-pages`) |
 | `.github/workflows/release-extension.yml` | build → lint → sign → Release → Pages |
@@ -74,6 +76,19 @@ npx --yes web-ext@10 run --source-dir src
 ```
 
 Or load `src/manifest.json` via `about:debugging` → **Load Temporary Add-on…**.
+
+There are two checks, both run from the repo root:
+
+```sh
+node check-hidden.mjs      # every ffab-hidden class is actually hidden
+node check-behaviour.mjs   # picking, steps, persistence, export — needs Chrome
+```
+
+`check-behaviour.mjs` runs the real content script in a real DOM (headless
+Chrome, the shipped CSS linked) with only `storage.local`/`runtime` stubbed, so
+it covers what a unit test can't: which click does what, what the markdown brief
+actually says, and what survives a re-inject. It is a dev check and is not wired
+into the release workflow.
 
 ## Release
 
