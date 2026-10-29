@@ -123,6 +123,11 @@ The workflow signs with AMO, publishes a GitHub Release, and refreshes
   already-published version.
 - **Pages, not `raw.githubusercontent.com`** — raw serves `text/plain`; Pages
   serves `application/json` at a stable HTTPS URL.
+- **`file:///*` must be requested explicitly.** Firefox does NOT cover local
+  files under `<all_urls>`, so reviewing a prototype straight from disk gives
+  "Missing host permission for the tab" and no pill. The manifest names
+  `file:///*` for exactly that workflow; Firefox asks the user to approve the
+  added permission when the update lands.
 - **Lint locally with `--self-hosted`**, otherwise `addons-linter` errors on
   `update_url`. A few `UNSAFE_VAR_ASSIGNMENT` warnings are known and harmless: the
   drawer's own markup is built with `innerHTML` from `escapeHtml`-ed values.
