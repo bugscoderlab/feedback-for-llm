@@ -117,7 +117,7 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 | File | Role |
 | --- | --- |
 | `manifest.json` | MV2 manifest: content script on all URLs, storage, background |
-| `background.js` | Toolbar click → toggle drawer; open-remark badge |
+| `background.js` | Toolbar click → toggle pill, injecting the content script on demand if the tab isn't ready; open-remark badge |
 | `content.js` | Picking (remark / remove / step), selectors, descriptions, popover, drawer, markers, export |
 | `feedback.css` | Prototype-styled UI, `ffab-`-prefixed |
 | `icons/` | Extension icons (generated, see `tools/gen-icons.js`) |

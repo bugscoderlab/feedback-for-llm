@@ -71,6 +71,10 @@ await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 execFileSync("node", [join(here, "check-hidden.mjs"), "--dir", outDir], {
   stdio: "inherit",
 });
+// …and fail if the toolbar click can be dropped on the floor (loading tab).
+execFileSync("node", [join(here, "check-toggle.mjs"), "--dir", outDir], {
+  stdio: "inherit",
+});
 
 // --- zip ---------------------------------------------------------------------
 const version = manifest.version;

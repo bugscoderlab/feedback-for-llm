@@ -66,6 +66,7 @@ there. Both happen to be hosted here.
 | `build.mjs` | Assemble `dist/`, overlay the release manifest, zip |
 | `check-hidden.mjs` | Fail on a "hidden" class no CSS rule hides |
 | `check-behaviour.mjs` | Drive `src/content.js` in headless Chrome and assert the flows |
+| `check-toggle.mjs` | Drive `src/background.js` with a stubbed `browser` and assert the toolbar click reaches the pill (inject-on-retry) |
 | `gen-updates.mjs` | Rewrite `updates.json`, stage the `gh-pages` payload |
 | `updates.json` | Seed manifest (the live copy is on `gh-pages`) |
 | `.github/workflows/release-extension.yml` | build → lint → sign → Release → Pages |
@@ -82,6 +83,7 @@ There are two checks, both run from the repo root:
 
 ```sh
 node check-hidden.mjs      # every ffab-hidden class is actually hidden
+node check-toggle.mjs      # the toolbar click always reaches the pill (or fails quietly)
 node check-behaviour.mjs   # picking, steps, persistence, export — needs Chrome
 ```
 
