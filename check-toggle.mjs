@@ -35,18 +35,23 @@ const target = resolve(here, dirFlag !== -1 ? process.argv[dirFlag + 1] : "src")
 // One stub per scenario. `sendMessage`/`executeScript` are the scripted
 // behaviours; `calls` records every invocation for the assertions.
 function makeBrowser({ onSend, onInject }) {
-  const calls = { sendMessage: [], executeScript: [], badge: [] };
+  const calls = { sendMessage: [], executeScript: [], badge: [], setPopup: [] };
+  const listeners = { updated: [], activated: [] };
   const browser = {
     browserAction: {
       onClicked: { addListener: (fn) => (browser.__click = fn) },
       setBadgeText: (opts) => calls.badge.push(opts.text),
       setBadgeBackgroundColor: () => {},
+      setPopup: async (opts) => void calls.setPopup.push(opts),
     },
     runtime: {
       getManifest: () => ({ version: "0.0.0" }),
       onMessage: { addListener: () => {} },
     },
     tabs: {
+      onUpdated: { addListener: (fn) => listeners.updated.push(fn) },
+      onActivated: { addListener: (fn) => listeners.activated.push(fn) },
+      get: async (id) => ({ id, url: browser.__tabUrls?.[id] }),
       sendMessage: async (...args) => {
         calls.sendMessage.push(args);
         return onSend(calls.sendMessage.length, args);
@@ -56,6 +61,7 @@ function makeBrowser({ onSend, onInject }) {
         return onInject(calls.executeScript.length, args);
       },
     },
+    __listeners: listeners,
   };
   return { browser, calls };
 }
@@ -147,9 +153,27 @@ const fail = (name, detail) => problems.push(`${name}: ${detail}`);
   else fail("unscriptable tab", `settled=${clickSettled}, badge=${calls ? JSON.stringify(calls.badge) : "n/a"}`);
 }
 
+// 5. file:// tabs: Firefox never lets extension content run there (no
+//    permission exists), so the toolbar button must swap the toggle click for
+//    the explanatory popup — and swap back on ordinary pages.
+{
+  const { browser, calls } = makeBrowser({ onSend: () => {}, onInject: () => {} });
+  const ctx = vm.createContext({ browser, console, setTimeout: () => 0 });
+  vm.runInContext(await readFile(join(target, "background.js"), "utf8"), ctx, {
+    filename: "background.js",
+  });
+  browser.__tabUrls = { 7: "file:///Users/z/Documents/ceo_dashboard/prototype-11.html", 8: "https://example.com/" };
+  for (const fn of browser.__listeners.updated) await fn(7, { url: browser.__tabUrls[7] }, { url: browser.__tabUrls[7] });
+  for (const fn of browser.__listeners.updated) await fn(8, { url: browser.__tabUrls[8] }, { url: browser.__tabUrls[8] });
+  const pops = Object.fromEntries(calls.setPopup.map((p) => [p.tabId, p.popup]));
+  const ok = pops[7] === "popup.html" && pops[8] === "";
+  if (ok) console.log("  ok   file:// tab        → popup swap; https tab → toggle click kept");
+  else fail("file:// popup swap", `setPopup calls=${JSON.stringify(calls.setPopup)}`);
+}
+
 if (problems.length) {
   console.error(`\ncheck-toggle: ${problems.length} problem(s) in ${target}`);
   for (const p of problems) console.error(`  FAIL ${p}`);
   process.exit(1);
 }
-console.log(`\ncheck-toggle: OK (${target}, 4 tab condition(s) checked)`);
+console.log(`\ncheck-toggle: OK (${target}, 5 tab condition(s) checked)`);

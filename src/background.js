@@ -54,3 +54,26 @@ browser.runtime.onMessage.addListener((msg) => {
     browser.browserAction.setBadgeBackgroundColor({ color: "#4f46e5" });
   }
 });
+
+/* Local files: Firefox never lets extension content into file:// documents —
+ * no permission grants access (verified empirically against a signed permanent
+ * install: "Missing host permission for the tab" with file:///* present in
+ * both permissions and content_scripts.matches). The toolbar click therefore
+ * can't bring out the pill there; swap the click for a popup that says so and
+ * hands over the http-server workaround. Other pages keep the toggle click. */
+function syncPopup(tabId, url) {
+  if (!url) return;
+  browser.browserAction
+    .setPopup({ tabId, popup: url.startsWith("file:") ? "popup.html" : "" })
+    .catch(() => {}); // tab may already be gone
+}
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  syncPopup(tabId, changeInfo.url ?? tab.url);
+});
+browser.tabs.onActivated.addListener(async ({ tabId }) => {
+  try {
+    syncPopup(tabId, (await browser.tabs.get(tabId)).url);
+  } catch {
+    /* tab gone */
+  }
+});

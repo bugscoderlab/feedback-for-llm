@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; width: 330px; margin: 0; padding: 14px; color: #1a2233; }
+  h1 { font-size: 13px; margin: 0 0 8px; }
+  p { margin: 0 0 10px; }
+  .why { color: #5a6478; font-size: 12px; }
+  pre { background: #f3f4f8; border-radius: 8px; padding: 10px; font-size: 11.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin: 0 0 10px; }
+  button { font: inherit; font-weight: 600; border: 1px solid #e3e6ec; background: #ffffff; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: #c6ccd8; }
+  code { color: #0f766e; }
+</style>
+</head>
+<body>
+  <h1>📝 Local files can't host the pill</h1>
+  <p class="why">Firefox never allows extensions into <code>file://</code>
+  pages — no permission can change that, so the toolbar button can't drop the
+  pill here. Serve the folder over http and the pill works like on any page:</p>
+  <pre id="cmds">python3 -m http.server 8000
+# then open the page via http://localhost:8000/</pre>
+  <button id="copy">📋 Copy commands</button>
+  <script src="popup.js"></script>
+</body>
+</html>

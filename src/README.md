@@ -95,6 +95,11 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 
 ## Notes & limitations
 
+- **The toolbar button on a `file://` tab opens an explanatory popup instead
+  of the pill.** Firefox never allows extension content on local files — no
+  permission exists (verified against a signed permanent install). The popup
+  hands over the commands to serve the folder over http; don't try to "fix"
+  this with more manifest permissions.
 - Remarks are scoped per page (`origin + pathname`, query ignored).
 - **The extension raises no browser dialogs** — no `alert`, no `confirm`. Firefox
   stops showing dialogs for a page that has already shown a few, and a suppressed
@@ -124,5 +129,6 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 | `manifest.json` | MV2 manifest: content script on all URLs, storage, background |
 | `background.js` | Toolbar click → toggle pill, injecting the content script on demand if the tab isn't ready; open-remark badge |
 | `content.js` | Picking (remark / remove / step), selectors, descriptions, popover, drawer, markers, export |
+| `popup.html` / `popup.js` | What the toolbar button shows on `file://` tabs, where Firefox forbids extension content: the platform restriction plus the http-server workaround |
 | `feedback.css` | Prototype-styled UI, `ffab-`-prefixed |
 | `icons/` | Extension icons (generated, see `tools/gen-icons.js`) |

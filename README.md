@@ -123,11 +123,14 @@ The workflow signs with AMO, publishes a GitHub Release, and refreshes
   already-published version.
 - **Pages, not `raw.githubusercontent.com`** — raw serves `text/plain`; Pages
   serves `application/json` at a stable HTTPS URL.
-- **`file:///*` must be requested explicitly.** Firefox does NOT cover local
-  files under `<all_urls>`, so reviewing a prototype straight from disk gives
-  "Missing host permission for the tab" and no pill. The manifest names
-  `file:///*` for exactly that workflow; Firefox asks the user to approve the
-  added permission when the update lands.
+- **`file://` pages can't host the pill — a Firefox platform rule, not a
+  permission.** Firefox never lets extension content into `file://` documents:
+  a signed permanent install with `file:///*` in both `permissions` and
+  `content_scripts.matches` still gets "Missing host permission for the tab"
+  (see bug 1253646 — Firefox has no per-extension file-access grant). On such
+  tabs the toolbar button opens a popup that explains this and offers the
+  http-server workaround; don't re-add `file:///*` to the manifest — it grants
+  nothing.
 - **Lint locally with `--self-hosted`**, otherwise `addons-linter` errors on
   `update_url`. A few `UNSAFE_VAR_ASSIGNMENT` warnings are known and harmless: the
   drawer's own markup is built with `innerHTML` from `escapeHtml`-ed values.
