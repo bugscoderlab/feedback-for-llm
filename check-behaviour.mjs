@@ -77,7 +77,10 @@ const HARNESS_JS = `
     },
     runtime: {
       sendMessage: async () => {},
-      onMessage: { addListener: (fn) => { msgListener = fn; } },
+      onMessage: {
+        addListener: (fn) => { msgListener = fn; },
+        removeListener: (fn) => { if (msgListener === fn) msgListener = null; },
+      },
     },
   };
   window.__store = () => store;
@@ -196,8 +199,12 @@ const HARNESS_JS = `
     check("review follows the steps", md.indexOf("Review:") < md.indexOf(REVIEW) && md.indexOf(REVIEW) !== -1);
     check("remarks still follow the review", md.indexOf(REVIEW) < md.indexOf("## 1. [OPEN] button"));
 
-    // 9. reloading / re-injecting on update rebuilds from storage
-    window.__ffabLoaded = false;
+    // 9. re-injecting after an extension update: the old instance's listener is
+    //    dead (it belonged to the previous version), and the script must retire
+    //    the old instance and re-arm — with no flag to clear, or the toolbar
+    //    toggle lands on no live listener. That was the "click, nothing
+    //    happens" bug.
+    msgListener = null; // the update killed the old version's listener
     const script = document.createElement("script");
     await new Promise((res) => { script.onload = res; script.src = "content.js"; document.body.appendChild(script); });
     await sleep(60);
@@ -205,6 +212,15 @@ const HARNESS_JS = `
       !!$("ffab-dr-steps") && $("ffab-dr-steps").textContent.indexOf("Steps to reproduce (4)") !== -1);
     check("re-inject restores the review", $("ffab-dr-review-note").value === REVIEW);
     check("re-inject leaves one drawer", document.querySelectorAll("#ffab-drawer").length === 1);
+    // The re-armed instance answers the toolbar toggle — this is the
+    // "clicked after an update, nothing happened" regression: before the
+    // teardown design, the re-injected script bailed on its loaded-flag and no
+    // live listener remained, so these calls did nothing at all.
+    check("re-inject reinstated the pill", !$("ffab-fab").classList.contains("ffab-hidden"));
+    msgListener({ type: "ffab:toggle" });
+    check("the toggle answers after re-inject (pill away)", $("ffab-fab").classList.contains("ffab-hidden"));
+    msgListener({ type: "ffab:toggle" });
+    check("the toggle answers after re-inject (pill back)", !$("ffab-fab").classList.contains("ffab-hidden"));
 
     // 10. Clear all asks in place — two clicks, no dialog — then takes the
     // walkthrough with it: steps, review, remarks, basket

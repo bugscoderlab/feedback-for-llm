@@ -101,11 +101,16 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
   `confirm()` returns `false` with nothing on screen to explain it, so the button
   reads as broken from then on. Copy, Clear all and a failed *locate* all report on
   the button that was clicked instead. Keep it that way.
-- Updating the extension takes effect in already-open tabs without a reload:
-  Firefox re-injects the content script on update, and the new instance discards
-  the previous instance's leftover UI before drawing its own (see the clean-slate
-  block in `content.js`). Without that, two drawers coexist invisibly and the
-  visible one keeps the old release's buttons.
+- Updating the extension does NOT reload content scripts in already-open tabs —
+  Firefox only re-injects on a dev reload, so a real update leaves the old
+  instance running with a dead message listener until the page reloads or the
+  script is injected again. The extension heals this itself: the background
+  injects `content.js` when a click finds no listener (see `background.js`),
+  and the injected instance retires the previous one via `__ffabTeardown` —
+  removing its listeners and UI — before re-arming, so exactly one live
+  listener exists per page. (Without that retirement, the old UI would linger
+  and two drawers would coexist invisibly; see the clean-slate block in
+  `content.js`.)
 - Styles are `ffab-`-prefixed and injected via the manifest (CSP-exempt), but
   marker/popover *positioning* uses inline styles — on pages with a strict
   `style-src` CSP (no `'unsafe-inline'`), positioning may degrade. Dev servers

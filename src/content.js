@@ -6,8 +6,27 @@
  * browser.storage.local, so they survive reloads and browser restarts.
  */
 (() => {
-  if (window.__ffabLoaded) return;
-  window.__ffabLoaded = true;
+  // Snapshot the previous instance's open surface BEFORE touching it: a re-run
+  // must re-open whatever the reviewer had open (an update landing in an open
+  // tab, the background injecting us on demand).
+  const prevDrawer = document.getElementById("ffab-drawer");
+  const prevFab = document.getElementById("ffab-fab");
+  const reopenDrawer = !!prevDrawer && !prevDrawer.classList.contains("ffab-hidden");
+  const reopenPill = reopenDrawer || (!!prevFab && !prevFab.classList.contains("ffab-hidden"));
+
+  // A previous instance of this script can already live in this page:
+  //  - Firefox does NOT re-inject content scripts into open tabs when the
+  //    extension updates — the tab keeps the old instance, and its ffab:toggle
+  //    listener dies with the old extension version.
+  //  - the background also injects us on demand when a click races the page load.
+  // Bailing out on a loaded-flag (the old behaviour) leaves such a tab with no
+  // working listener — the "clicked the toolbar button, nothing happened" bug.
+  // So retire the previous instance properly and re-arm against the live one.
+  try {
+    window.__ffabTeardown?.();
+  } catch {
+    // its extension APIs are already gone — nothing to remove
+  }
 
   /* ---------------- storage ---------------- */
 
@@ -77,19 +96,11 @@
     "ffab-dr-review",
   ];
 
-  // Adopt a clean slate before injecting. Firefox injects content scripts into
-  // already-open tabs when the extension updates, and the previous instance's UI
-  // is still in the document. Left there, those older nodes answer getElementById
-  // first: this instance renders its drawer list into the OLD drawer, which keeps
-  // its old buttons and stays the only visible panel, while the new UI sits
-  // hidden behind it — unreachable until a page reload. So the user sees the
-  // previous release's buttons after every update. Drop the leftovers, rebuild,
-  // and reinstate whatever was open so the panel survives the update in place.
-  const prevDrawer = document.getElementById("ffab-drawer");
-  const prevFab = document.getElementById("ffab-fab");
-  const reopenDrawer = !!prevDrawer && !prevDrawer.classList.contains("ffab-hidden");
-  const reopenPill = reopenDrawer || (!!prevFab && !prevFab.classList.contains("ffab-hidden"));
-
+  // Adopt a clean slate before injecting, covering whatever the teardown above
+  // did not: an instance that died before storing its teardown, or UI a
+  // same-version re-injection left behind. Leftovers are dangerous — older
+  // nodes answer getElementById first, and this instance would render its
+  // drawer list into a panel that stays unreachable until a page reload.
   document
     .querySelectorAll(UI.map((id) => `#${id}`).join(", "))
     .forEach((el) => el.remove());
@@ -200,53 +211,47 @@
     return node instanceof Element && node.closest("#" + UI.join(", #"));
   }
 
-  document.addEventListener(
-    "mousemove",
-    (e) => {
-      if (!pickMode) return;
-      if (inUI(e.target)) {
-        hide($("ffab-highlight"));
-        return;
-      }
-      const r = e.target.getBoundingClientRect();
-      const h = $("ffab-highlight");
-      h.style.left = `${r.left - 2}px`;
-      h.style.top = `${r.top - 2}px`;
-      h.style.width = `${r.width + 4}px`;
-      h.style.height = `${r.height + 4}px`;
-      show(h);
-    },
-    true
-  );
+  function onPickHover(e) {
+    if (!pickMode) return;
+    if (inUI(e.target)) {
+      hide($("ffab-highlight"));
+      return;
+    }
+    const r = e.target.getBoundingClientRect();
+    const h = $("ffab-highlight");
+    h.style.left = `${r.left - 2}px`;
+    h.style.top = `${r.top - 2}px`;
+    h.style.width = `${r.width + 4}px`;
+    h.style.height = `${r.height + 4}px`;
+    show(h);
+  }
+  document.addEventListener("mousemove", onPickHover, true);
 
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (!pickMode) return;
-      if (inUI(e.target)) return; // let UI clicks through
-      e.preventDefault();
-      e.stopPropagation();
-      const el = e.target;
-      if (pickMode === "remove") {
-        // Removal is a hit-list: no popover, no note, and the picker stays armed
-        // so a run of elements can be basketed in one pass.
-        addToBasket(el);
-        return;
-      }
-      if (pickMode === "step") {
-        // Same idea for the walkthrough: each click appends the next step and the
-        // picker stays armed, so a run is picked in one motion and Esc ends it.
-        addStep(el);
-        return;
-      }
-      pendingTarget = { selector: buildSelector(el), ...describeElement(el) };
-      stopPicking();
-      openPopover(e.clientX, e.clientY);
-    },
-    true
-  );
+  function onPickClick(e) {
+    if (!pickMode) return;
+    if (inUI(e.target)) return; // let UI clicks through
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.target;
+    if (pickMode === "remove") {
+      // Removal is a hit-list: no popover, no note, and the picker stays armed
+      // so a run of elements can be basketed in one pass.
+      addToBasket(el);
+      return;
+    }
+    if (pickMode === "step") {
+      // Same idea for the walkthrough: each click appends the next step and the
+      // picker stays armed, so a run is picked in one motion and Esc ends it.
+      addStep(el);
+      return;
+    }
+    pendingTarget = { selector: buildSelector(el), ...describeElement(el) };
+    stopPicking();
+    openPopover(e.clientX, e.clientY);
+  }
+  document.addEventListener("click", onPickClick, true);
 
-  document.addEventListener("keydown", (e) => {
+  function onKeydown(e) {
     if (e.key === "Escape") {
       // A finished run is followed by writing, so Esc puts the drawer — and the
       // review box under the steps — in front of the reviewer instead of leaving
@@ -259,7 +264,8 @@
       if (pickMode) stopPicking();
       closePopover();
     }
-  });
+  }
+  document.addEventListener("keydown", onKeydown);
 
   /* ---------------- removal basket ---------------- */
 
@@ -734,7 +740,7 @@
     }
   }
 
-  browser.runtime.onMessage.addListener((msg) => {
+  function onRuntimeMessage(msg) {
     // Toolbar button: bring out the pill by itself, or put everything away.
     if (msg.type === "ffab:toggle") {
       if (isPillVisible()) {
@@ -745,7 +751,8 @@
         show($("ffab-fab"));
       }
     }
-  });
+  }
+  browser.runtime.onMessage.addListener(onRuntimeMessage);
 
   /** True when the pill is on the page. */
   function isPillVisible() {
@@ -889,6 +896,30 @@
   // an open tab swaps the buttons underneath the user instead of closing the panel.
   if (reopenDrawer) setDrawerOpen(true);
   else if (reopenPill) show($("ffab-fab"));
+
+  /* Retire this instance when the script is injected again into this page
+   * (extension update, or the background's on-demand injection): drop every
+   * listener we registered plus our UI, so exactly one live ffab:toggle
+   * listener exists per page and stale nodes never shadow new ones. */
+
+  function teardown() {
+    try {
+      browser.runtime.onMessage.removeListener(onRuntimeMessage);
+    } catch {
+      // the extension context is already gone — nothing to remove
+    }
+    document.removeEventListener("mousemove", onPickHover, true);
+    document.removeEventListener("click", onPickClick, true);
+    document.removeEventListener("keydown", onKeydown);
+    document.removeEventListener("scroll", queueMarkers, { capture: true });
+    removeEventListener("resize", queueMarkers);
+    document
+      .querySelectorAll(UI.map((id) => `#${id}`).join(", "))
+      .forEach((el) => el.remove());
+    document.body?.classList.remove("ffab-annotating", "ffab-removing", "ffab-stepping");
+    if (window.__ffabTeardown === teardown) delete window.__ffabTeardown;
+  }
+  window.__ffabTeardown = teardown;
 
   load();
 })();
