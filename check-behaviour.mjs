@@ -81,6 +81,7 @@ const HARNESS_JS = `
         addListener: (fn) => { msgListener = fn; },
         removeListener: (fn) => { if (msgListener === fn) msgListener = null; },
       },
+      getManifest: () => ({ version: "0.0.0" }),
     },
   };
   window.__store = () => store;

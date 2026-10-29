@@ -24,6 +24,7 @@
   // So retire the previous instance properly and re-arm against the live one.
   try {
     window.__ffabTeardown?.();
+    console.error("ffab: retired the previous instance");
   } catch {
     // its extension APIs are already gone — nothing to remove
   }
@@ -753,6 +754,7 @@
     }
   }
   browser.runtime.onMessage.addListener(onRuntimeMessage);
+  console.error(`ffab: armed v${browser.runtime.getManifest().version} on ${location.href}`);
 
   /** True when the pill is on the page. */
   function isPillVisible() {

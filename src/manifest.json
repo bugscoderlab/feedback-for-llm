@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Feedback for LLM",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "📝 Pick any element on a page, record the run of steps that led to the problem, and export a markdown brief for your LLM coding agent.",
   "permissions": [
     "storage",
