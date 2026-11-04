@@ -8,7 +8,10 @@ GitHub Releases.
 ![Feedback for LLM in action: the pill, the remark popover, and the drawer on an invoice-scanner workbench](screenshot.png)
 
 - **🎯 Pick element** — hover highlights, click opens the remark popover with a
-  generated label, page context, and the element's CSS selector.
+  generated label, page context, and the element's CSS selector. **Tab** walks
+  the highlight up to the parent container (Shift+Tab back down), so nested
+  targets can be escalated to the `section`/`div` that actually needs the
+  remark; **Esc** cancels.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
   and drop straight into a removal basket (red ✕ markers), one after another, until
   you press Esc.

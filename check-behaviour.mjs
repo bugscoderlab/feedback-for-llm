@@ -123,7 +123,7 @@ const HARNESS_JS = `
     click($("ffab-dr-step"));
     check("step mode marks the body", document.body.classList.contains("ffab-stepping"));
     check("step mode hides the drawer", $("ffab-drawer").classList.contains("ffab-hidden"));
-    check("step button reads as armed", $("ffab-dr-step").textContent.indexOf("Esc to write") !== -1);
+    check("step button reads as armed", $("ffab-dr-step").textContent.indexOf("Tab = parent") !== -1);
 
     // 4. a run of picks: each appends a step, the picker stays armed
     click($("add-user"));
@@ -187,6 +187,22 @@ const HARNESS_JS = `
     click($("demo-select"));
     await sleep(30);
     check("a pick on a dropdown opens the remark popover", !$("ffab-pop").classList.contains("ffab-hidden"));
+    click($("ffab-ap-cancel"));
+    await sleep(30);
+    click($("ffab-fab")); // put the drawer back as it was
+    await sleep(30);
+
+    // 7c. escalation: Tab walks the pick up the ancestor chain, so a container
+    // can be picked even when the cursor sits on a child inside it
+    click($("ffab-dr-pick"));
+    const saveBtn = $("save");
+    saveBtn.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    await sleep(30);
+    click(saveBtn);
+    await sleep(30);
+    check("Tab escalates the pick to the parent container",
+      $("ffab-ap-sel").textContent.trim() === "div.card", $("ffab-ap-sel").textContent.trim());
     click($("ffab-ap-cancel"));
     await sleep(30);
     click($("ffab-fab")); // put the drawer back as it was

@@ -11,7 +11,11 @@ agent as a markdown brief.
 - **🎯 Pick element** — the cursor becomes a crosshair; hovering
   highlights the target; clicking opens the remark popover with a generated
   label ("button “Approve all pending”", "column header “Qty”", …), the page
-  context, and the element's CSS selector.
+  context, and the element's CSS selector. **Tab** (Shift+Tab) walks the
+  highlight up (back down) the ancestor chain, so a container like
+  `section.doc-view` is reachable even when the cursor sits on a child inside
+  it; the press itself is swallowed, so native `<select>` dropdowns and other
+  controls don't react while you aim.
 - **🚫 Remove element** — the same crosshair (the highlight turns red), but
   each click skips the popover and drops the element straight into the **removal
   basket**: no note to write, no per-element form. The picker stays armed so you can

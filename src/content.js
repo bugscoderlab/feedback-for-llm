@@ -181,6 +181,8 @@
 
   function stopPicking() {
     pickMode = null;
+    hoverEl = null;
+    escalateSteps = 0;
     document.body.classList.remove("ffab-annotating", "ffab-removing", "ffab-stepping");
     $("ffab-fab").classList.remove("ffab-picking");
     setPickButtons();
@@ -197,19 +199,46 @@
     del.classList.toggle("ffab-on", pickMode === "remove");
     step.classList.toggle("ffab-on", pickMode === "step");
     pick.textContent =
-      pickMode === "remark" ? "🎯 Click an element… (Esc to cancel)" : "🎯 Pick element";
+      pickMode === "remark" ? "🎯 Click an element… (Tab = parent · Esc)" : "🎯 Pick element";
     del.textContent =
       pickMode === "remove"
-        ? "🚫 Click elements to remove… (Esc to finish)"
+        ? "🚫 Click elements to remove… (Tab = parent · Esc)"
         : "🚫 Remove element";
     step.textContent =
       pickMode === "step"
-        ? "🧭 Click each step… (Esc to write it down)"
+        ? "🧭 Click each step… (Tab = parent · Esc)"
         : "🧭 Record steps";
   }
 
   function inUI(node) {
     return node instanceof Element && node.closest("#" + UI.join(", #"));
+  }
+
+  // While picking, the highlight follows the cursor, and Tab (Shift+Tab) walks
+  // up (back down) the ancestor chain — so a container such as section.doc-view
+  // can be picked without hunting for a bare patch of it to hover. Moving onto
+  // another element resets the walk.
+  let hoverEl = null; // innermost element under the cursor
+  let escalateSteps = 0; // ancestors above hoverEl currently highlighted
+
+  function currentPick() {
+    let el = hoverEl;
+    for (let i = 0; el && i < escalateSteps; i++) el = el.parentElement;
+    return el && el.nodeType === 1 ? el : null;
+  }
+
+  function paintHighlight(el) {
+    const h = $("ffab-highlight");
+    if (!el) {
+      hide(h);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    h.style.left = `${r.left - 2}px`;
+    h.style.top = `${r.top - 2}px`;
+    h.style.width = `${r.width + 4}px`;
+    h.style.height = `${r.height + 4}px`;
+    show(h);
   }
 
   function onPickHover(e) {
@@ -218,13 +247,11 @@
       hide($("ffab-highlight"));
       return;
     }
-    const r = e.target.getBoundingClientRect();
-    const h = $("ffab-highlight");
-    h.style.left = `${r.left - 2}px`;
-    h.style.top = `${r.top - 2}px`;
-    h.style.width = `${r.width + 4}px`;
-    h.style.height = `${r.height + 4}px`;
-    show(h);
+    if (e.target !== hoverEl) {
+      hoverEl = e.target;
+      escalateSteps = 0;
+    }
+    paintHighlight(currentPick());
   }
   document.addEventListener("mousemove", onPickHover, true);
 
@@ -245,7 +272,7 @@
     if (inUI(e.target)) return; // let UI clicks through
     e.preventDefault();
     e.stopPropagation();
-    const el = e.target;
+    const el = currentPick() ?? e.target;
     if (pickMode === "remove") {
       // Removal is a hit-list: no popover, no note, and the picker stays armed
       // so a run of elements can be basketed in one pass.
@@ -265,6 +292,16 @@
   document.addEventListener("click", onPickClick, true);
 
   function onKeydown(e) {
+    if (e.key === "Tab" && pickMode) {
+      // Walk the pick up (Shift+Tab: back down) the ancestor chain, so nested
+      // targets can be escalated to the container that actually needs remark.
+      e.preventDefault(); // Tab must not move focus while picking
+      if (!hoverEl) return;
+      if (e.shiftKey) escalateSteps = Math.max(0, escalateSteps - 1);
+      else if (currentPick()?.parentElement) escalateSteps++;
+      paintHighlight(currentPick());
+      return;
+    }
     if (e.key === "Escape") {
       // A finished run is followed by writing, so Esc puts the drawer — and the
       // review box under the steps — in front of the reviewer instead of leaving
