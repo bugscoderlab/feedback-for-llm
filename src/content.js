@@ -88,7 +88,6 @@
 
   const UI = [
     "ffab-highlight",
-    "ffab-region",
     "ffab-pop",
     "ffab-drawer",
     "ffab-fab",
@@ -113,7 +112,6 @@
   const root = document.createElement("div");
   root.innerHTML = `
     <div id="ffab-highlight" class="ffab-hidden"></div>
-    <div id="ffab-region" style="position:fixed;display:none;border:2px dashed #4f46e5;background:rgba(79,70,229,.12);z-index:2147483646;pointer-events:none;box-sizing:border-box;"></div>
     <div id="ffab-pop" class="ffab-hidden">
       <div class="ffab-ctx" id="ffab-ap-ctx"></div>
       <div class="ffab-sel" id="ffab-ap-sel"></div>
@@ -186,9 +184,6 @@
     hoverEl = null;
     layerStack = [];
     pickLevel = 0;
-    dragStart = null;
-    dragging = false;
-    $("ffab-region").style.display = "none";
     document.body.classList.remove("ffab-annotating", "ffab-removing", "ffab-stepping");
     $("ffab-fab").classList.remove("ffab-picking");
     setPickButtons();
@@ -205,7 +200,7 @@
     del.classList.toggle("ffab-on", pickMode === "remove");
     step.classList.toggle("ffab-on", pickMode === "step");
     pick.textContent =
-      pickMode === "remark" ? "🎯 Click an element or drag a region… (Tab/[ up · Esc)" : "🎯 Pick element";
+      pickMode === "remark" ? "🎯 Click an element… (Tab/[ up · Esc)" : "🎯 Pick element";
     del.textContent =
       pickMode === "remove"
         ? "🚫 Click elements to remove… (Tab/[ up · Esc)"
@@ -254,16 +249,6 @@
       hide($("ffab-highlight"));
       return;
     }
-    // A press-drag (remark mode) takes over the gesture: paint the region
-    // instead of following the hover.
-    if (dragStart && pickMode === "remark") {
-      const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
-      if (!dragging && moved > 6) dragging = true;
-      if (dragging) {
-        paintRegion(normalizeRect(dragStart, { x: e.clientX, y: e.clientY }));
-        return;
-      }
-    }
     if (e.target !== hoverEl) {
       hoverEl = e.target;
       pickLevel = 0;
@@ -279,32 +264,6 @@
   }
   document.addEventListener("mousemove", onPickHover, true);
 
-  // In remark mode a press may become a drag: hold and drag to box a screen
-  // region (no element to click — a spacer, a misaligned gap, a composite
-  // block). Releasing after a real drag opens the popover for the box; a plain
-  // press without movement stays a normal element pick.
-  let dragStart = null; // press anchor while picking
-  let dragging = false; // moved far enough that release becomes a region
-  let suppressClick = false; // swallow the click that follows a drag release
-
-  function normalizeRect(a, b) {
-    return {
-      left: Math.min(a.x, b.x),
-      top: Math.min(a.y, b.y),
-      width: Math.abs(a.x - b.x),
-      height: Math.abs(a.y - b.y),
-    };
-  }
-
-  function paintRegion(r) {
-    const el = $("ffab-region");
-    el.style.left = `${r.left}px`;
-    el.style.top = `${r.top}px`;
-    el.style.width = `${r.width}px`;
-    el.style.height = `${r.height}px`;
-    el.style.display = "block";
-  }
-
   function onPickMousedown(e) {
     // Swallow the press itself: a native <select> opens its dropdown on
     // mousedown — before a click handler could cancel anything — and custom
@@ -312,42 +271,12 @@
     // the control closed; the click handler then records the pick.
     if (!pickMode) return;
     if (inUI(e.target)) return; // let UI clicks through
-    if (pickMode === "remark") dragStart = { x: e.clientX, y: e.clientY };
     e.preventDefault();
     e.stopPropagation();
   }
   document.addEventListener("mousedown", onPickMousedown, true);
 
-  function onPickMouseup(e) {
-    if (!pickMode || !dragStart) return;
-    const start = dragStart;
-    dragStart = null;
-    if (!dragging) return;
-    dragging = false;
-    suppressClick = true;
-    setTimeout(() => (suppressClick = false), 0); // the browser's post-drag click, same task only
-    $("ffab-region").style.display = "none";
-    const r = normalizeRect(start, { x: e.clientX, y: e.clientY });
-    stopPicking();
-    pendingTarget = {
-      selector: `(region ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)})`,
-      docCtx: `${document.title || "(untitled)"} · ${location.host}${location.pathname} (screen region)`,
-      label: "screen region",
-      content: "",
-      region: { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height },
-    };
-    openPopover(r.left + r.width / 2, r.top + r.height / 2);
-  }
-  document.addEventListener("mouseup", onPickMouseup, true);
-
   function onPickClick(e) {
-    if (suppressClick) {
-      // the click that follows a region-drag release — nothing to pick
-      suppressClick = false;
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
     if (!pickMode) return;
     if (inUI(e.target)) return; // let UI clicks through
     e.preventDefault();
@@ -983,18 +912,11 @@
 
   /** Scroll an annotation's target into view and return its current viewport rect. */
   async function revealAnnotation(a) {
-    if (a.region) {
-      // a boxed screen region, stored in page coordinates so it survives scrolling
-      scrollTo(a.region.x, a.region.y);
-      await nextFrame();
-      await sleep(60);
-      return { left: a.region.x - scrollX, top: a.region.y - scrollY, width: a.region.w, height: a.region.h };
-    }
     let el = null;
     try {
       el = document.querySelector(a.selector);
     } catch {
-      return null; // not a selector (region handled above) — no element to shoot
+      return null; // not a selector — no element to shoot
     }
     if (!el) return null;
     el.scrollIntoView({ block: "nearest", behavior: "instant" });
@@ -1007,9 +929,8 @@
 
   /**
    * A tall PNG stacking one viewport crop per remark, numbered to match the
-   * brief. Region remarks crop their box; element remarks crop the element's
-   * current rect. Anything that can't be resolved renders as a labelled
-   * placeholder row, so the numbers always line up with the markdown.
+   * brief. Anything that can't be resolved renders as a labelled placeholder
+   * row, so the numbers always line up with the markdown.
    * Returns null when screen capture is unavailable (e.g. test harnesses).
    */
   async function compositeAnnotations() {
@@ -1186,7 +1107,6 @@
     }
     document.removeEventListener("mousemove", onPickHover, true);
     document.removeEventListener("mousedown", onPickMousedown, true);
-    document.removeEventListener("mouseup", onPickMouseup, true);
     document.removeEventListener("click", onPickClick, true);
     document.removeEventListener("keydown", onKeydown);
     document.removeEventListener("scroll", queueMarkers, { capture: true });

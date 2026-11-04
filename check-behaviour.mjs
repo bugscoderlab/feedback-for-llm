@@ -226,20 +226,6 @@ const HARNESS_JS = `
     click($("ffab-fab")); // put the drawer back as it was
     await sleep(30);
 
-    // 7e. dragging a box in remark mode captures a screen region
-    click($("ffab-dr-pick"));
-    const sr = $("save").getBoundingClientRect();
-    document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: sr.x - 20, clientY: sr.y - 20 }));
-    document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: sr.right + 20, clientY: sr.bottom + 20 }));
-    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: sr.right + 20, clientY: sr.bottom + 20 }));
-    await sleep(30);
-    check("dragging boxes a screen region", $("ffab-ap-sel").textContent.indexOf("(region") === 0,
-      $("ffab-ap-sel").textContent);
-    $("ffab-ap-note").value = "this whole corner needs more air";
-    click($("ffab-ap-save"));
-    await sleep(30);
-    check("region remark is saved", rec().annotations.some((a) => a.selector.indexOf("(region") === 0));
-
     // 8. the brief (copy assembles crops first — each remark scrolls into view
     //    and settles — so the clipboard lands a few hundred ms after the click)
     click($("ffab-dr-copy"));

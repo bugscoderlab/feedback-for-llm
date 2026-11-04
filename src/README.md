@@ -15,9 +15,7 @@ agent as a markdown brief.
   highlight up through the stack of elements under the cursor
   (`elementsFromPoint` — nested parents *and* overlapping siblings),
   Shift+Tab/`[` back down. The press itself is swallowed, so native `<select>`
-  dropdowns and other controls don't react while you aim. In remark mode,
-  **drag** boxes a screen region — a gap with no element to click, a composite
-  block — saved as a `(region x,y w×h)` remark.
+  dropdowns and other controls don't react while you aim.
 - **🚫 Remove element** — the same crosshair (the highlight turns red), but
   each click skips the popover and drops the element straight into the **removal
   basket**: no note to write, no per-element form. The picker stays armed so you can

@@ -12,9 +12,7 @@ GitHub Releases.
   **`]`** walk the highlight up through everything stacked under the cursor —
   nested parents *and* overlapping siblings — Shift+Tab/`[` back down, so the
   exact layer you mean is reachable without hovering bare padding; **Esc**
-  cancels. **Drag** in remark mode boxes a screen region when there is no
-  element to click (a gap, a composite block) — it lands in the brief as a
-  `(region x,y w×h)` remark.
+  cancels.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
   and drop straight into a removal basket (red ✕ markers), one after another, until
   you press Esc.
