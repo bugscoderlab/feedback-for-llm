@@ -863,151 +863,15 @@
   }
 
   function copyFeedback() {
+    const t = feedbackText();
     // No dialog: the button that was clicked reports the result itself, so the
     // page never gets a modal to dismiss and the reviewer keeps clicking.
     const report = (ok) => flashButton($("ffab-dr-copy"), ok ? "✓ Copied" : "⚠ Copy failed", ok);
-    const t = feedbackText();
-    (async () => {
-      // Preferred payload: ONE clipboard item with both the markdown brief and
-      // a composite PNG of every annotated element, so the agent sees what the
-      // reviewer saw next to each selector. Falls back to text alone where
-      // screen capture or the async clipboard API is unavailable.
-      try {
-        const png = await compositeAnnotations();
-        if (png && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              "text/plain": new Blob([t], { type: "text/plain" }),
-              "image/png": png,
-            }),
-          ]);
-          return report(true);
-        }
-      } catch {
-        /* fall through to the text-only path */
-      }
-      if (navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(t).then(() => report(true), () => report(legacyCopy(t)));
-      } else {
-        report(legacyCopy(t));
-      }
-    })();
-  }
-
-  /* ---------------- composite screenshot for the clipboard ---------------- */
-
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  // A settled frame after a scroll: rAF can stall in headless browsers, so
-  // this is a timer, not requestAnimationFrame.
-  const nextFrame = () => sleep(100);
-
-  function loadImage(src) {
-    return new Promise((res, rej) => {
-      const img = new Image();
-      img.onload = () => res(img);
-      img.onerror = rej;
-      img.src = src;
-    });
-  }
-
-  /** Scroll an annotation's target into view and return its current viewport rect. */
-  async function revealAnnotation(a) {
-    let el = null;
-    try {
-      el = document.querySelector(a.selector);
-    } catch {
-      return null; // not a selector — no element to shoot
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(t).then(() => report(true), () => report(legacyCopy(t)));
+    } else {
+      report(legacyCopy(t));
     }
-    if (!el) return null;
-    el.scrollIntoView({ block: "nearest", behavior: "instant" });
-    await nextFrame();
-    await sleep(60); // let lazy content settle after the scroll
-    const r = el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight) return null;
-    return r;
-  }
-
-  /**
-   * A tall PNG stacking one viewport crop per remark, numbered to match the
-   * brief. Anything that can't be resolved renders as a labelled placeholder
-   * row, so the numbers always line up with the markdown.
-   * Returns null when screen capture is unavailable (e.g. test harnesses).
-   */
-  async function compositeAnnotations() {
-    // browser.tabs does not exist in content scripts (verified in Firefox),
-    // so each crop is captured by the background on request.
-    if (!browser.runtime?.sendMessage) return null;
-    const dpr = window.devicePixelRatio || 1;
-    const shots = [];
-    for (const a of annotations.slice(0, 20)) {
-      const rect = await revealAnnotation(a);
-      if (!rect) {
-        shots.push({ num: a.num, missing: true });
-        continue;
-      }
-      try {
-        const shot = await browser.runtime.sendMessage({ type: "ffab:capture" });
-        if (!shot?.dataUrl) {
-          shots.push({ num: a.num, missing: true });
-          continue;
-        }
-        const img = await loadImage(shot.dataUrl);
-        const sx = Math.max(0, Math.round(rect.left * dpr));
-        const sy = Math.max(0, Math.round(rect.top * dpr));
-        const sw = Math.min(img.width - sx, Math.round(rect.width * dpr));
-        const sh = Math.min(img.height - sy, Math.round(rect.height * dpr));
-        if (sw <= 8 || sh <= 8) {
-          shots.push({ num: a.num, missing: true });
-          continue;
-        }
-        const c = document.createElement("canvas");
-        c.width = sw;
-        c.height = sh;
-        c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-        shots.push({ num: a.num, canvas: c });
-      } catch {
-        shots.push({ num: a.num, missing: true });
-      }
-    }
-    if (!shots.length) return null;
-    const PAD = 16;
-    const GAP = 12;
-    const BADGE = 30;
-    const MISSING_H = 72;
-    const W = Math.max(480, ...shots.map((s) => (s.canvas ? s.canvas.width : 0)));
-    const H =
-      GAP + shots.reduce((h, s) => h + BADGE + GAP + (s.canvas ? s.canvas.height : MISSING_H) + GAP, GAP);
-    const out = document.createElement("canvas");
-    out.width = W + PAD * 2;
-    out.height = H;
-    const g = out.getContext("2d");
-    g.fillStyle = "#0f172a";
-    g.fillRect(0, 0, out.width, out.height);
-    let y = GAP;
-    for (const s of shots) {
-      g.fillStyle = "#4f46e5";
-      g.beginPath();
-      g.arc(PAD + BADGE / 2, y + BADGE / 2, BADGE / 2, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#ffffff";
-      g.font = "bold 16px sans-serif";
-      g.textAlign = "center";
-      g.textBaseline = "middle";
-      g.fillText(String(s.num), PAD + BADGE / 2, y + BADGE / 2 + 1);
-      const top = y + BADGE + GAP;
-      if (s.canvas) {
-        g.drawImage(s.canvas, PAD, top);
-      } else {
-        g.fillStyle = "#1e293b";
-        g.fillRect(PAD, top, W, MISSING_H);
-        g.fillStyle = "#94a3b8";
-        g.font = "14px sans-serif";
-        g.textAlign = "left";
-        g.fillText(`#${s.num} — element not visible here`, PAD + 12, top + MISSING_H / 2);
-      }
-      y = top + (s.canvas ? s.canvas.height : MISSING_H) + GAP;
-    }
-    return await new Promise((res) => out.toBlob(res, "image/png"));
   }
 
   /** Say what just happened on the button that caused it, then put its label back. */

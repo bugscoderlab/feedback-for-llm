@@ -226,10 +226,9 @@ const HARNESS_JS = `
     click($("ffab-fab")); // put the drawer back as it was
     await sleep(30);
 
-    // 8. the brief (copy assembles crops first — each remark scrolls into view
-    //    and settles — so the clipboard lands a few hundred ms after the click)
+    // 8. the brief
     click($("ffab-dr-copy"));
-    for (let i = 0; i < 60 && $("ffab-dr-copy").textContent.indexOf("Copied") === -1; i++) await sleep(50);
+    await sleep(60);
     const md = window.__export || "";
     check("export exists", !!md);
     check("copy reports on its own button, not in a dialog",

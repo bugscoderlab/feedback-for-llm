@@ -39,9 +39,7 @@ agent as a markdown brief.
   appears only when there is something to clear, and asks a second time on the button
   itself rather than in a dialog.
 - **📋 Copy / ⬇ feedback.md** — exports exactly the prototype's format, with the
-  walkthrough in front of it. Copy also assembles a **composite PNG** (one
-  numbered viewport crop per remark, stacked) and writes brief + image to the
-  clipboard as a single `ClipboardItem`, so a chat paste carries both:
+  walkthrough in front of it:
 
   ```markdown
   # UI feedback — <page title>

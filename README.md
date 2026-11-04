@@ -27,9 +27,7 @@ GitHub Releases.
 - **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format: a
   `## Steps to reproduce` walkthrough and its review, then the remarks
   (`[OPEN]` vs `RESOLVED`), then the `## Remove these elements` hit-list. Copy
-  puts the brief **and** a composite PNG — one numbered viewport crop per
-  remark — on the clipboard in a single paste. Copy confirms
-  on the button itself (`✓ Copied`) rather than in a dialog.
+  confirms on the button itself (`✓ Copied`) rather than in a dialog.
 - **Toolbar button** drops the on-page **📝 Feedback *n* pill** (and shows an
   open-remark badge count); the drawer opens only from that pill, and the toolbar
   button puts the pill — and everything with it — away again.
