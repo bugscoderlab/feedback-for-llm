@@ -178,6 +178,20 @@ const HARNESS_JS = `
     check("remark is saved", rec().annotations.length === 1);
     check("review box is untouched by a remark", $("ffab-dr-review-note").value === REVIEW);
 
+    // 7b. a dropdown: the press is swallowed so the menu cannot open, and the
+    // pick still lands in the remark popover
+    click($("ffab-dr-pick"));
+    const press = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    $("demo-select").dispatchEvent(press);
+    check("picking swallows the mousedown (a dropdown cannot open)", press.defaultPrevented);
+    click($("demo-select"));
+    await sleep(30);
+    check("a pick on a dropdown opens the remark popover", !$("ffab-pop").classList.contains("ffab-hidden"));
+    click($("ffab-ap-cancel"));
+    await sleep(30);
+    click($("ffab-fab")); // put the drawer back as it was
+    await sleep(30);
+
     // 8. the brief
     click($("ffab-dr-copy"));
     await sleep(60);
@@ -322,6 +336,7 @@ function harnessHtml() {
     <button id="add-user">Add user</button>
     <input id="email" placeholder="Email">
     <button id="save">Save</button>
+    <select id="demo-select"><option>One</option><option>Two</option></select>
   </div>
 <script>
 ${HARNESS_JS}

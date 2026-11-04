@@ -228,6 +228,18 @@
   }
   document.addEventListener("mousemove", onPickHover, true);
 
+  function onPickMousedown(e) {
+    // Swallow the press itself: a native <select> opens its dropdown on
+    // mousedown — before a click handler could cancel anything — and custom
+    // menus often open on mousedown too. Cancelling the default here keeps
+    // the control closed; the click handler then records the pick.
+    if (!pickMode) return;
+    if (inUI(e.target)) return; // let UI clicks through
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  document.addEventListener("mousedown", onPickMousedown, true);
+
   function onPickClick(e) {
     if (!pickMode) return;
     if (inUI(e.target)) return; // let UI clicks through
@@ -911,6 +923,7 @@
       // the extension context is already gone — nothing to remove
     }
     document.removeEventListener("mousemove", onPickHover, true);
+    document.removeEventListener("mousedown", onPickMousedown, true);
     document.removeEventListener("click", onPickClick, true);
     document.removeEventListener("keydown", onKeydown);
     document.removeEventListener("scroll", queueMarkers, { capture: true });
