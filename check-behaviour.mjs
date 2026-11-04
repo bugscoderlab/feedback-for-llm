@@ -123,7 +123,7 @@ const HARNESS_JS = `
     click($("ffab-dr-step"));
     check("step mode marks the body", document.body.classList.contains("ffab-stepping"));
     check("step mode hides the drawer", $("ffab-drawer").classList.contains("ffab-hidden"));
-    check("step button reads as armed", $("ffab-dr-step").textContent.indexOf("Tab = parent") !== -1);
+    check("step button reads as armed", $("ffab-dr-step").textContent.indexOf("Tab/[") !== -1);
 
     // 4. a run of picks: each appends a step, the picker stays armed
     click($("add-user"));
@@ -196,7 +196,8 @@ const HARNESS_JS = `
     // can be picked even when the cursor sits on a child inside it
     click($("ffab-dr-pick"));
     const saveBtn = $("save");
-    saveBtn.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+    const sbr = saveBtn.getBoundingClientRect();
+    saveBtn.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: sbr.x + sbr.width / 2, clientY: sbr.y + sbr.height / 2 }));
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     await sleep(30);
     click(saveBtn);
@@ -207,6 +208,37 @@ const HARNESS_JS = `
     await sleep(30);
     click($("ffab-fab")); // put the drawer back as it was
     await sleep(30);
+
+    // 7d. [ cycles through OVERLAPPING elements stacked at a point, not just
+    // ancestors — the front layer is on top, the back layer sits under it
+    click($("ffab-dr-pick"));
+    const front = $("layer-front");
+    const fr = front.getBoundingClientRect();
+    front.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: fr.x + 6, clientY: fr.y + 6 }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "]", bubbles: true, cancelable: true }));
+    await sleep(30);
+    click(front);
+    await sleep(30);
+    check("] reaches the element stacked behind",
+      $("ffab-ap-sel").textContent.trim() === "#layer-back", $("ffab-ap-sel").textContent.trim());
+    click($("ffab-ap-cancel"));
+    await sleep(30);
+    click($("ffab-fab")); // put the drawer back as it was
+    await sleep(30);
+
+    // 7e. dragging a box in remark mode captures a screen region
+    click($("ffab-dr-pick"));
+    const sr = $("save").getBoundingClientRect();
+    document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: sr.x - 20, clientY: sr.y - 20 }));
+    document.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: sr.right + 20, clientY: sr.bottom + 20 }));
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: sr.right + 20, clientY: sr.bottom + 20 }));
+    await sleep(30);
+    check("dragging boxes a screen region", $("ffab-ap-sel").textContent.indexOf("(region") === 0,
+      $("ffab-ap-sel").textContent);
+    $("ffab-ap-note").value = "this whole corner needs more air";
+    click($("ffab-ap-save"));
+    await sleep(30);
+    check("region remark is saved", rec().annotations.some((a) => a.selector.indexOf("(region") === 0));
 
     // 8. the brief
     click($("ffab-dr-copy"));
@@ -353,6 +385,10 @@ function harnessHtml() {
     <input id="email" placeholder="Email">
     <button id="save">Save</button>
     <select id="demo-select"><option>One</option><option>Two</option></select>
+    <div style="position:relative;height:50px;margin-top:8px">
+      <div id="layer-back" style="position:absolute;inset:0;background:#fee">back</div>
+      <div id="layer-front" style="position:absolute;inset:0">front</div>
+    </div>
   </div>
 <script>
 ${HARNESS_JS}

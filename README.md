@@ -8,10 +8,13 @@ GitHub Releases.
 ![Feedback for LLM in action: the pill, the remark popover, and the drawer on an invoice-scanner workbench](screenshot.png)
 
 - **🎯 Pick element** — hover highlights, click opens the remark popover with a
-  generated label, page context, and the element's CSS selector. **Tab** walks
-  the highlight up to the parent container (Shift+Tab back down), so nested
-  targets can be escalated to the `section`/`div` that actually needs the
-  remark; **Esc** cancels.
+  generated label, page context, and the element's CSS selector. **Tab** or
+  **`]`** walk the highlight up through everything stacked under the cursor —
+  nested parents *and* overlapping siblings — Shift+Tab/`[` back down, so the
+  exact layer you mean is reachable without hovering bare padding; **Esc**
+  cancels. **Drag** in remark mode boxes a screen region when there is no
+  element to click (a gap, a composite block) — it lands in the brief as a
+  `(region x,y w×h)` remark.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
   and drop straight into a removal basket (red ✕ markers), one after another, until
   you press Esc.
@@ -25,7 +28,9 @@ GitHub Releases.
   locate or drop individual steps, and accept a raw CSS selector from Firefox Inspect.
 - **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format: a
   `## Steps to reproduce` walkthrough and its review, then the remarks
-  (`[OPEN]` vs `RESOLVED`), then the `## Remove these elements` hit-list. Copy confirms
+  (`[OPEN]` vs `RESOLVED`), then the `## Remove these elements` hit-list. Copy
+  puts the brief **and** a composite PNG — one numbered viewport crop per
+  remark — on the clipboard in a single paste. Copy confirms
   on the button itself (`✓ Copied`) rather than in a dialog.
 - **Toolbar button** drops the on-page **📝 Feedback *n* pill** (and shows an
   open-remark badge count); the drawer opens only from that pill, and the toolbar

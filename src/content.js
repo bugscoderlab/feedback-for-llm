@@ -88,6 +88,7 @@
 
   const UI = [
     "ffab-highlight",
+    "ffab-region",
     "ffab-pop",
     "ffab-drawer",
     "ffab-fab",
@@ -112,6 +113,7 @@
   const root = document.createElement("div");
   root.innerHTML = `
     <div id="ffab-highlight" class="ffab-hidden"></div>
+    <div id="ffab-region" style="position:fixed;display:none;border:2px dashed #4f46e5;background:rgba(79,70,229,.12);z-index:2147483646;pointer-events:none;box-sizing:border-box;"></div>
     <div id="ffab-pop" class="ffab-hidden">
       <div class="ffab-ctx" id="ffab-ap-ctx"></div>
       <div class="ffab-sel" id="ffab-ap-sel"></div>
@@ -182,7 +184,11 @@
   function stopPicking() {
     pickMode = null;
     hoverEl = null;
-    escalateSteps = 0;
+    layerStack = [];
+    pickLevel = 0;
+    dragStart = null;
+    dragging = false;
+    $("ffab-region").style.display = "none";
     document.body.classList.remove("ffab-annotating", "ffab-removing", "ffab-stepping");
     $("ffab-fab").classList.remove("ffab-picking");
     setPickButtons();
@@ -199,14 +205,14 @@
     del.classList.toggle("ffab-on", pickMode === "remove");
     step.classList.toggle("ffab-on", pickMode === "step");
     pick.textContent =
-      pickMode === "remark" ? "🎯 Click an element… (Tab = parent · Esc)" : "🎯 Pick element";
+      pickMode === "remark" ? "🎯 Click an element or drag a region… (Tab/[ up · Esc)" : "🎯 Pick element";
     del.textContent =
       pickMode === "remove"
-        ? "🚫 Click elements to remove… (Tab = parent · Esc)"
+        ? "🚫 Click elements to remove… (Tab/[ up · Esc)"
         : "🚫 Remove element";
     step.textContent =
       pickMode === "step"
-        ? "🧭 Click each step… (Tab = parent · Esc)"
+        ? "🧭 Click each step… (Tab/[ up · Esc)"
         : "🧭 Record steps";
   }
 
@@ -214,16 +220,17 @@
     return node instanceof Element && node.closest("#" + UI.join(", #"));
   }
 
-  // While picking, the highlight follows the cursor, and Tab (Shift+Tab) walks
-  // up (back down) the ancestor chain — so a container such as section.doc-view
-  // can be picked without hunting for a bare patch of it to hover. Moving onto
-  // another element resets the walk.
+  // While picking, the highlight follows the cursor. Tab/] walk it up through
+  // the stack of elements under the pointer (elementsFromPoint — nested targets
+  // AND overlapping siblings), Shift+Tab/[ back down — so containers and
+  // stacked elements are reachable without hunting for bare padding to hover.
+  // Moving onto another element resets the walk.
   let hoverEl = null; // innermost element under the cursor
-  let escalateSteps = 0; // ancestors above hoverEl currently highlighted
+  let layerStack = []; // everything under the pointer, topmost first
+  let pickLevel = 0; // index into layerStack currently highlighted
 
   function currentPick() {
-    let el = hoverEl;
-    for (let i = 0; el && i < escalateSteps; i++) el = el.parentElement;
+    const el = layerStack[Math.min(pickLevel, layerStack.length - 1)];
     return el && el.nodeType === 1 ? el : null;
   }
 
@@ -247,13 +254,56 @@
       hide($("ffab-highlight"));
       return;
     }
+    // A press-drag (remark mode) takes over the gesture: paint the region
+    // instead of following the hover.
+    if (dragStart && pickMode === "remark") {
+      const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
+      if (!dragging && moved > 6) dragging = true;
+      if (dragging) {
+        paintRegion(normalizeRect(dragStart, { x: e.clientX, y: e.clientY }));
+        return;
+      }
+    }
     if (e.target !== hoverEl) {
       hoverEl = e.target;
-      escalateSteps = 0;
+      pickLevel = 0;
+      try {
+        const stack = document.elementsFromPoint(e.clientX, e.clientY).filter((el) => !inUI(el));
+        const stop = stack.indexOf(document.body);
+        layerStack = stop === -1 ? stack : stack.slice(0, stop + 1);
+      } catch {
+        layerStack = [e.target];
+      }
     }
     paintHighlight(currentPick());
   }
   document.addEventListener("mousemove", onPickHover, true);
+
+  // In remark mode a press may become a drag: hold and drag to box a screen
+  // region (no element to click — a spacer, a misaligned gap, a composite
+  // block). Releasing after a real drag opens the popover for the box; a plain
+  // press without movement stays a normal element pick.
+  let dragStart = null; // press anchor while picking
+  let dragging = false; // moved far enough that release becomes a region
+  let suppressClick = false; // swallow the click that follows a drag release
+
+  function normalizeRect(a, b) {
+    return {
+      left: Math.min(a.x, b.x),
+      top: Math.min(a.y, b.y),
+      width: Math.abs(a.x - b.x),
+      height: Math.abs(a.y - b.y),
+    };
+  }
+
+  function paintRegion(r) {
+    const el = $("ffab-region");
+    el.style.left = `${r.left}px`;
+    el.style.top = `${r.top}px`;
+    el.style.width = `${r.width}px`;
+    el.style.height = `${r.height}px`;
+    el.style.display = "block";
+  }
 
   function onPickMousedown(e) {
     // Swallow the press itself: a native <select> opens its dropdown on
@@ -262,12 +312,42 @@
     // the control closed; the click handler then records the pick.
     if (!pickMode) return;
     if (inUI(e.target)) return; // let UI clicks through
+    if (pickMode === "remark") dragStart = { x: e.clientX, y: e.clientY };
     e.preventDefault();
     e.stopPropagation();
   }
   document.addEventListener("mousedown", onPickMousedown, true);
 
+  function onPickMouseup(e) {
+    if (!pickMode || !dragStart) return;
+    const start = dragStart;
+    dragStart = null;
+    if (!dragging) return;
+    dragging = false;
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 0); // the browser's post-drag click, same task only
+    $("ffab-region").style.display = "none";
+    const r = normalizeRect(start, { x: e.clientX, y: e.clientY });
+    stopPicking();
+    pendingTarget = {
+      selector: `(region ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}×${Math.round(r.height)})`,
+      docCtx: `${document.title || "(untitled)"} · ${location.host}${location.pathname} (screen region)`,
+      label: "screen region",
+      content: "",
+      region: { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height },
+    };
+    openPopover(r.left + r.width / 2, r.top + r.height / 2);
+  }
+  document.addEventListener("mouseup", onPickMouseup, true);
+
   function onPickClick(e) {
+    if (suppressClick) {
+      // the click that follows a region-drag release — nothing to pick
+      suppressClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (!pickMode) return;
     if (inUI(e.target)) return; // let UI clicks through
     e.preventDefault();
@@ -292,13 +372,14 @@
   document.addEventListener("click", onPickClick, true);
 
   function onKeydown(e) {
-    if (e.key === "Tab" && pickMode) {
-      // Walk the pick up (Shift+Tab: back down) the ancestor chain, so nested
-      // targets can be escalated to the container that actually needs remark.
+    if ((e.key === "Tab" || e.key === "[" || e.key === "]") && pickMode) {
+      // Walk the pick through the layer stack under the cursor: Tab/] up
+      // (toward the page root), Shift+Tab/[ back down.
       e.preventDefault(); // Tab must not move focus while picking
-      if (!hoverEl) return;
-      if (e.shiftKey) escalateSteps = Math.max(0, escalateSteps - 1);
-      else if (currentPick()?.parentElement) escalateSteps++;
+      if (!layerStack.length) return;
+      if (e.key === "]" || (e.key === "Tab" && !e.shiftKey))
+        pickLevel = Math.min(layerStack.length - 1, pickLevel + 1);
+      else pickLevel = Math.max(0, pickLevel - 1);
       paintHighlight(currentPick());
       return;
     }
@@ -853,15 +934,151 @@
   }
 
   function copyFeedback() {
-    const t = feedbackText();
     // No dialog: the button that was clicked reports the result itself, so the
     // page never gets a modal to dismiss and the reviewer keeps clicking.
     const report = (ok) => flashButton($("ffab-dr-copy"), ok ? "✓ Copied" : "⚠ Copy failed", ok);
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(t).then(() => report(true), () => report(legacyCopy(t)));
-    } else {
-      report(legacyCopy(t));
+    const t = feedbackText();
+    (async () => {
+      // Preferred payload: ONE clipboard item with both the markdown brief and
+      // a composite PNG of every annotated element, so the agent sees what the
+      // reviewer saw next to each selector. Falls back to text alone where
+      // screen capture or the async clipboard API is unavailable.
+      try {
+        const png = await compositeAnnotations();
+        if (png && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/plain": new Blob([t], { type: "text/plain" }),
+              "image/png": png,
+            }),
+          ]);
+          return report(true);
+        }
+      } catch {
+        /* fall through to the text-only path */
+      }
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(t).then(() => report(true), () => report(legacyCopy(t)));
+      } else {
+        report(legacyCopy(t));
+      }
+    })();
+  }
+
+  /* ---------------- composite screenshot for the clipboard ---------------- */
+
+  const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function loadImage(src) {
+    return new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = rej;
+      img.src = src;
+    });
+  }
+
+  /** Scroll an annotation's target into view and return its current viewport rect. */
+  async function revealAnnotation(a) {
+    if (a.region) {
+      // a boxed screen region, stored in page coordinates so it survives scrolling
+      scrollTo(a.region.x, a.region.y);
+      await nextFrame();
+      await sleep(60);
+      return { left: a.region.x - scrollX, top: a.region.y - scrollY, width: a.region.w, height: a.region.h };
     }
+    let el = null;
+    try {
+      el = document.querySelector(a.selector);
+    } catch {
+      return null; // not a selector (region handled above) — no element to shoot
+    }
+    if (!el) return null;
+    el.scrollIntoView({ block: "nearest", behavior: "instant" });
+    await nextFrame();
+    await sleep(60); // let lazy content settle after the scroll
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight) return null;
+    return r;
+  }
+
+  /**
+   * A tall PNG stacking one viewport crop per remark, numbered to match the
+   * brief. Region remarks crop their box; element remarks crop the element's
+   * current rect. Anything that can't be resolved renders as a labelled
+   * placeholder row, so the numbers always line up with the markdown.
+   * Returns null when screen capture is unavailable (e.g. test harnesses).
+   */
+  async function compositeAnnotations() {
+    if (!browser.tabs?.captureVisibleTab) return null;
+    const dpr = window.devicePixelRatio || 1;
+    const shots = [];
+    for (const a of annotations.slice(0, 20)) {
+      const rect = await revealAnnotation(a);
+      if (!rect) {
+        shots.push({ num: a.num, missing: true });
+        continue;
+      }
+      try {
+        const dataUrl = await browser.tabs.captureVisibleTab({ format: "png" });
+        const img = await loadImage(dataUrl);
+        const sx = Math.max(0, Math.round(rect.left * dpr));
+        const sy = Math.max(0, Math.round(rect.top * dpr));
+        const sw = Math.min(img.width - sx, Math.round(rect.width * dpr));
+        const sh = Math.min(img.height - sy, Math.round(rect.height * dpr));
+        if (sw <= 8 || sh <= 8) {
+          shots.push({ num: a.num, missing: true });
+          continue;
+        }
+        const c = document.createElement("canvas");
+        c.width = sw;
+        c.height = sh;
+        c.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        shots.push({ num: a.num, canvas: c });
+      } catch {
+        shots.push({ num: a.num, missing: true });
+      }
+    }
+    if (!shots.length) return null;
+    const PAD = 16;
+    const GAP = 12;
+    const BADGE = 30;
+    const MISSING_H = 72;
+    const W = Math.max(480, ...shots.map((s) => (s.canvas ? s.canvas.width : 0)));
+    const H =
+      GAP + shots.reduce((h, s) => h + BADGE + GAP + (s.canvas ? s.canvas.height : MISSING_H) + GAP, GAP);
+    const out = document.createElement("canvas");
+    out.width = W + PAD * 2;
+    out.height = H;
+    const g = out.getContext("2d");
+    g.fillStyle = "#0f172a";
+    g.fillRect(0, 0, out.width, out.height);
+    let y = GAP;
+    for (const s of shots) {
+      g.fillStyle = "#4f46e5";
+      g.beginPath();
+      g.arc(PAD + BADGE / 2, y + BADGE / 2, BADGE / 2, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#ffffff";
+      g.font = "bold 16px sans-serif";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(String(s.num), PAD + BADGE / 2, y + BADGE / 2 + 1);
+      const top = y + BADGE + GAP;
+      if (s.canvas) {
+        g.drawImage(s.canvas, PAD, top);
+      } else {
+        g.fillStyle = "#1e293b";
+        g.fillRect(PAD, top, W, MISSING_H);
+        g.fillStyle = "#94a3b8";
+        g.font = "14px sans-serif";
+        g.textAlign = "left";
+        g.fillText(`#${s.num} — element not visible here`, PAD + 12, top + MISSING_H / 2);
+      }
+      y = top + (s.canvas ? s.canvas.height : MISSING_H) + GAP;
+    }
+    return await new Promise((res) => out.toBlob(res, "image/png"));
   }
 
   /** Say what just happened on the button that caused it, then put its label back. */
@@ -961,6 +1178,7 @@
     }
     document.removeEventListener("mousemove", onPickHover, true);
     document.removeEventListener("mousedown", onPickMousedown, true);
+    document.removeEventListener("mouseup", onPickMouseup, true);
     document.removeEventListener("click", onPickClick, true);
     document.removeEventListener("keydown", onKeydown);
     document.removeEventListener("scroll", queueMarkers, { capture: true });
