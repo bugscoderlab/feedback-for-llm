@@ -5,6 +5,8 @@ for your LLM coding agent. A self-distributed, **auto-updating** Firefox add-on:
 install the signed `.xpi` once, and Firefox keeps it current from this repo's
 GitHub Releases.
 
+![Feedback for LLM in action: the pill, the remark popover, and the drawer on an invoice-scanner workbench](screenshot.png)
+
 - **🎯 Pick element** — hover highlights, click opens the remark popover with a
   generated label, page context, and the element's CSS selector.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
