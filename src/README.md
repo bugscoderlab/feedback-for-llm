@@ -36,8 +36,8 @@ agent as a markdown brief.
 - **Drawer** — every remark with *locate* (scrolls to the element and flashes
   it), *resolve/reopen*, and *delete*; every step with *locate* and *drop*.
   Footer accepts a raw CSS selector pasted from Firefox Inspect. **🗑 Clear all**
-  appears only when there is something to clear, and asks a second time on the button
-  itself rather than in a dialog.
+  appears only when there is something to clear, and swaps to an explicit
+  ✓/✕ pair on the spot rather than using a dialog.
 - **📋 Copy / ⬇ feedback.md** — exports exactly the prototype's format, with the
   walkthrough in front of it:
 

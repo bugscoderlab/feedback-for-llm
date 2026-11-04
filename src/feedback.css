@@ -296,6 +296,23 @@ body.ffab-stepping #ffab-highlight {
   flex-wrap: wrap;
 }
 #ffab-dr-clear.ffab-hidden { display: none; }
+/* The in-place confirm that replaces Clear all: an explicit ✓/✕ choice
+   instead of a dialog or a re-click arm. */
+#ffab-dr-clear-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5a6478;
+  white-space: nowrap;
+}
+#ffab-dr-clear-ask.ffab-hidden { display: none; }
+#ffab-dr-clear-ask .ffab-btn { padding: 4px 10px; font-size: 11.5px; }
+#ffab-dr-clear-yes { background: #e8f5ec; color: #15803d; border: 1px solid #bfe3c9; }
+#ffab-dr-clear-yes:hover { background: #d3eddb; }
+#ffab-dr-clear-no { background: #fdecec; color: #c02b2b; border: 1px solid #f2cccc; }
+#ffab-dr-clear-no:hover { background: #fbdcdc; }
 #ffab-drawer .ffab-dr-list {
   overflow: auto;
   padding: 10px 16px 16px;

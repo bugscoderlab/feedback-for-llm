@@ -137,6 +137,10 @@
         <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
         <button class="ffab-btn ffab-ghost ffab-hidden" id="ffab-dr-clear">🗑 Clear all</button>
+        <span id="ffab-dr-clear-ask" class="ffab-hidden">Clear everything?
+          <button class="ffab-btn ffab-yes" id="ffab-dr-clear-yes">✓ Yes</button>
+          <button class="ffab-btn ffab-no" id="ffab-dr-clear-no">✕ No</button>
+        </span>
       </div>
       <div class="ffab-dr-steps ffab-hidden" id="ffab-dr-steps"></div>
       <div class="ffab-dr-review ffab-hidden" id="ffab-dr-review">
@@ -544,7 +548,7 @@
   /** Clear all is offered only when there is something to clear. */
   function syncClearAll() {
     const any = !!(annotations.length || basket.length || steps.length || review.trim());
-    if (!any) disarmClear(); // a hidden button must not come back armed
+    if (!any) clearAsk(false); // a hidden button must not come back with its ask open
     $("ffab-dr-clear").classList.toggle("ffab-hidden", !any);
   }
 
@@ -796,6 +800,7 @@
       show($("ffab-fab")); // the pill is the drawer's handle, so it is always there
     } else {
       hide($("ffab-drawer"));
+      clearAsk(false); // closing the drawer must never strand the confirm chip
       stopPicking(); // closing the drawer should never strand the picker armed
     }
   }
@@ -909,40 +914,31 @@
   $("ffab-dr-download").addEventListener("click", downloadFeedback);
   // Clearing everything is destructive, but confirm() is the wrong tool for it:
   // Firefox stops showing dialogs for a page that has already shown a few, and a
-  // suppressed confirm() returns false with nothing on screen to explain it — the
-  // button looks broken from then on. The alert that Copy used to raise was enough
-  // to get the page there. So the button asks in place instead: the first click
-  // arms it, the second clears, and it stands down on its own.
-  let clearArmed = false;
-  let clearArmTimer = null;
-
-  function disarmClear() {
-    clearArmed = false;
-    clearTimeout(clearArmTimer);
-    const btn = $("ffab-dr-clear");
-    btn.textContent = "🗑 Clear all";
-    btn.classList.remove("ffab-arm");
+  // suppressed confirm() returns false with nothing on screen to explain it —
+  // the button looks broken from then on. So the button asks in place instead:
+  // it swaps for an explicit ✓/✕ pair. ✓ wipes everything; ✕ (or closing the
+  // drawer) backs out untouched.
+  function clearAsk(show) {
+    $("ffab-dr-clear").classList.toggle("ffab-hidden", show);
+    $("ffab-dr-clear-ask").classList.toggle("ffab-hidden", !show);
   }
 
-  $("ffab-dr-clear").addEventListener("click", async () => {
-    const btn = $("ffab-dr-clear");
+  $("ffab-dr-clear").addEventListener("click", () => {
     const empty = !annotations.length && !basket.length && !steps.length && !review.trim();
     if (empty) return;
-    if (!clearArmed) {
-      clearArmed = true;
-      btn.textContent = "🗑 Sure? Click again";
-      btn.classList.add("ffab-arm");
-      clearTimeout(clearArmTimer);
-      clearArmTimer = setTimeout(disarmClear, 4000);
-      return;
-    }
+    clearAsk(true);
+  });
+
+  $("ffab-dr-clear-no").addEventListener("click", () => clearAsk(false));
+
+  $("ffab-dr-clear-yes").addEventListener("click", async () => {
+    clearAsk(false);
     annotations = [];
     basket = [];
     steps = [];
     review = "";
     seq = 1;
     $("ffab-dr-review-note").value = "";
-    disarmClear();
     await save();
     render();
   });

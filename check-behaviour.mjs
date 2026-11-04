@@ -271,20 +271,28 @@ const HARNESS_JS = `
     msgListener({ type: "ffab:toggle" });
     check("the toggle answers after re-inject (pill back)", !$("ffab-fab").classList.contains("ffab-hidden"));
 
-    // 10. Clear all asks in place — two clicks, no dialog — then takes the
-    // walkthrough with it: steps, review, remarks, basket
+    // 10. Clear all asks in place with an explicit ✓/✕ — no dialog — then
+    // takes the walkthrough with it: steps, review, remarks, basket
     const dialogsBefore = (window.__confirms || []).length;
     click($("ffab-dr-clear"));
     await sleep(50);
-    check("first click arms instead of clearing",
-      rec().steps.length === 4 && $("ffab-dr-clear").textContent.indexOf("Sure") !== -1,
-      $("ffab-dr-clear").textContent);
+    check("clear all asks before wiping",
+      rec().steps.length === 4 && !$("ffab-dr-clear-ask").classList.contains("ffab-hidden")
+        && $("ffab-dr-clear").classList.contains("ffab-hidden"));
     check("clear all raises no dialog",
       (window.__confirms || []).length === dialogsBefore && (window.__alerts || []).length === 0,
       JSON.stringify([window.__confirms || [], window.__alerts || []]));
+    click($("ffab-dr-clear-no"));
+    await sleep(30);
+    check("cross cancels the wipe",
+      $("ffab-dr-clear-ask").classList.contains("ffab-hidden")
+        && !$("ffab-dr-clear").classList.contains("ffab-hidden")
+        && rec().steps.length === 4);
     click($("ffab-dr-clear"));
+    await sleep(30);
+    click($("ffab-dr-clear-yes"));
     await sleep(50);
-    check("second click clears", rec().steps.length === 0);
+    check("tick clears", rec().steps.length === 0);
     check("clear all empties the stored steps", rec().steps.length === 0, JSON.stringify(rec().steps));
     check("clear all empties the stored review", rec().review === "", JSON.stringify(rec().review));
     check("clear all empties remarks and basket",
@@ -311,7 +319,7 @@ const HARNESS_JS = `
     check("steps clear hides the section", $("ffab-dr-steps").classList.contains("ffab-hidden"));
     check("steps clear empties the list", $("ffab-dr-steps").innerHTML === "");
 
-    // 12. arming stands down on its own, and a stray click never clears
+    // 12. the ask stands down when cancelled, and never clears on its own
     click($("ffab-dr-step"));
     click($("add-user"));
     await sleep(30);
@@ -319,13 +327,13 @@ const HARNESS_JS = `
     await sleep(30);
     check("a third run records again", rec().steps.length === 1);
     click($("ffab-dr-clear"));
-    check("clear all arms", $("ffab-dr-clear").textContent.indexOf("Sure") !== -1,
-      $("ffab-dr-clear").textContent);
-    await sleep(4200);
-    check("arming stands down on its own",
-      $("ffab-dr-clear").textContent.indexOf("Clear all") !== -1 && !$("ffab-dr-clear").classList.contains("ffab-arm"),
-      $("ffab-dr-clear").textContent);
-    check("the armed click did not clear anything", rec().steps.length === 1);
+    check("clear all asks", !$("ffab-dr-clear-ask").classList.contains("ffab-hidden"));
+    click($("ffab-dr-clear-no"));
+    await sleep(30);
+    check("cross stands the ask down",
+      $("ffab-dr-clear-ask").classList.contains("ffab-hidden")
+        && !$("ffab-dr-clear").classList.contains("ffab-hidden"));
+    check("the cancelled ask did not clear anything", rec().steps.length === 1);
 
     // 13. locating something the view has moved on from reports on its own button
     const alertCount = (window.__alerts || []).length;
