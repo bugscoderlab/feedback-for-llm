@@ -53,6 +53,14 @@ browser.runtime.onMessage.addListener((msg) => {
     browser.browserAction.setBadgeText({ text: msg.count ? String(msg.count) : "" });
     browser.browserAction.setBadgeBackgroundColor({ color: "#4f46e5" });
   }
+  if (msg.type === "ffab:capture") {
+    // Content scripts have no browser.tabs (verified in Firefox 160) — the
+    // crop source has to be captured here, where captureVisibleTab lives.
+    return browser.tabs
+      .captureVisibleTab({ format: "png" })
+      .then((dataUrl) => ({ dataUrl }))
+      .catch((error) => ({ error: error.message }));
+  }
 });
 
 /* Local files: Firefox never lets extension content into file:// documents —

@@ -967,8 +967,10 @@
 
   /* ---------------- composite screenshot for the clipboard ---------------- */
 
-  const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // A settled frame after a scroll: rAF can stall in headless browsers, so
+  // this is a timer, not requestAnimationFrame.
+  const nextFrame = () => sleep(100);
 
   function loadImage(src) {
     return new Promise((res, rej) => {
@@ -1011,7 +1013,9 @@
    * Returns null when screen capture is unavailable (e.g. test harnesses).
    */
   async function compositeAnnotations() {
-    if (!browser.tabs?.captureVisibleTab) return null;
+    // browser.tabs does not exist in content scripts (verified in Firefox),
+    // so each crop is captured by the background on request.
+    if (!browser.runtime?.sendMessage) return null;
     const dpr = window.devicePixelRatio || 1;
     const shots = [];
     for (const a of annotations.slice(0, 20)) {
@@ -1021,8 +1025,12 @@
         continue;
       }
       try {
-        const dataUrl = await browser.tabs.captureVisibleTab({ format: "png" });
-        const img = await loadImage(dataUrl);
+        const shot = await browser.runtime.sendMessage({ type: "ffab:capture" });
+        if (!shot?.dataUrl) {
+          shots.push({ num: a.num, missing: true });
+          continue;
+        }
+        const img = await loadImage(shot.dataUrl);
         const sx = Math.max(0, Math.round(rect.left * dpr));
         const sy = Math.max(0, Math.round(rect.top * dpr));
         const sw = Math.min(img.width - sx, Math.round(rect.width * dpr));

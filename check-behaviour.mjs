@@ -240,9 +240,10 @@ const HARNESS_JS = `
     await sleep(30);
     check("region remark is saved", rec().annotations.some((a) => a.selector.indexOf("(region") === 0));
 
-    // 8. the brief
+    // 8. the brief (copy assembles crops first — each remark scrolls into view
+    //    and settles — so the clipboard lands a few hundred ms after the click)
     click($("ffab-dr-copy"));
-    await sleep(60);
+    for (let i = 0; i < 60 && $("ffab-dr-copy").textContent.indexOf("Copied") === -1; i++) await sleep(50);
     const md = window.__export || "";
     check("export exists", !!md);
     check("copy reports on its own button, not in a dialog",
