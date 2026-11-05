@@ -137,9 +137,9 @@
         <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
         <button class="ffab-btn ffab-ghost ffab-hidden" id="ffab-dr-clear">🗑 Clear all</button>
-        <span id="ffab-dr-clear-ask" class="ffab-hidden">Clear everything?
-          <button class="ffab-btn ffab-yes" id="ffab-dr-clear-yes">✓ Yes</button>
-          <button class="ffab-btn ffab-no" id="ffab-dr-clear-no">✕ No</button>
+        <span id="ffab-dr-clear-ask" class="ffab-hidden">Confirm?
+          <button class="ffab-btn ffab-yes" id="ffab-dr-clear-yes" title="Yes, clear everything">✓</button>
+          <button class="ffab-btn ffab-no" id="ffab-dr-clear-no" title="No, keep everything">✕</button>
         </span>
       </div>
       <div class="ffab-dr-steps ffab-hidden" id="ffab-dr-steps"></div>

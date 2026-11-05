@@ -297,18 +297,20 @@ body.ffab-stepping #ffab-highlight {
 }
 #ffab-dr-clear.ffab-hidden { display: none; }
 /* The in-place confirm that replaces Clear all: an explicit ✓/✕ choice
-   instead of a dialog or a re-click arm. */
+   instead of a dialog or a re-click arm. Sized to the button's own slot so
+   the swap never pushes the row's other buttons to a new line. */
 #ffab-dr-clear-ask {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #5a6478;
   white-space: nowrap;
+  padding: 7px 4px;
 }
 #ffab-dr-clear-ask.ffab-hidden { display: none; }
-#ffab-dr-clear-ask .ffab-btn { padding: 4px 10px; font-size: 11.5px; }
+#ffab-dr-clear-ask .ffab-btn { padding: 3px 9px; font-size: 11.5px; line-height: 1; }
 #ffab-dr-clear-yes { background: #e8f5ec; color: #15803d; border: 1px solid #bfe3c9; }
 #ffab-dr-clear-yes:hover { background: #d3eddb; }
 #ffab-dr-clear-no { background: #fdecec; color: #c02b2b; border: 1px solid #f2cccc; }
