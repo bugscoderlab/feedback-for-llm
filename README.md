@@ -20,8 +20,9 @@ GitHub Releases.
   and each pick appends the next step, in order, the picker staying armed so the whole
   walkthrough is one motion. Esc ends it and opens the drawer to write your **Review**.
   Stop mid-run and resume whenever — steps and review persist per page.
-- **💾 Save remarks** — numbered markers pin to elements, persist per page in
-  `browser.storage.local` (survive reloads and restarts).
+- **💾 Save remarks** — numbered markers pin to elements (click one to reopen
+  and edit its comment), persist per page in `browser.storage.local` (survive
+  reloads and restarts).
 - **Drawer** — locate / resolve / reopen / delete remarks, unmark basketed elements,
   locate or drop individual steps, and accept a raw CSS selector from Firefox Inspect.
 - **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format: a

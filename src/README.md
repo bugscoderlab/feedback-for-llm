@@ -30,9 +30,10 @@ agent as a markdown brief.
   go. **Esc ends the run and opens the drawer to write your Review** — because the
   point of stopping is having something to write down. Steps and review are positional
   and persisted per page, so you can stop mid-run, reload, and pick it back up.
-- **💾 Save remark** — numbered markers pin to the elements; clicking a marker
-  opens the drawer. Remarks persist per page in `browser.storage.local`
-  (survive reloads and browser restarts).
+- **💾 Save remark** — numbered markers pin to the elements; **clicking a
+  marker reopens its popover with the note prefilled**, so the comment can be
+  read and edited in place. Remarks persist per page in
+  `browser.storage.local` (survive reloads and browser restarts).
 - **Drawer** — every remark with *locate* (scrolls to the element and flashes
   it), *resolve/reopen*, and *delete*; every step with *locate* and *drop*.
   Footer accepts a raw CSS selector pasted from Firefox Inspect. **🗑 Clear all**

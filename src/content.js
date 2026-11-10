@@ -452,7 +452,18 @@
 
   /* ---------------- popover ---------------- */
 
+  let editingNum = null; // remark being edited (marker click), vs a fresh pick
+
+  function placePopover(x, y) {
+    const pw = 340;
+    const ph = 300;
+    $("ffab-pop").style.left = `${Math.min(x, innerWidth - pw - 16)}px`;
+    $("ffab-pop").style.top = `${Math.min(y, innerHeight - ph - 16)}px`;
+  }
+
   function openPopover(x, y) {
+    editingNum = null;
+    $("ffab-ap-save").textContent = "💾 Save remark";
     $("ffab-ap-ctx").innerHTML =
       `<b>${escapeHtml(pendingTarget.label)}</b><br>${escapeHtml(pendingTarget.docCtx)}` +
       (pendingTarget.content
@@ -461,22 +472,45 @@
     $("ffab-ap-sel").textContent = pendingTarget.selector;
     $("ffab-ap-note").value = "";
     show($("ffab-pop"));
-    const pw = 340;
-    const ph = 300;
-    $("ffab-pop").style.left = `${Math.min(x, innerWidth - pw - 16)}px`;
-    $("ffab-pop").style.top = `${Math.min(y, innerHeight - ph - 16)}px`;
+    placePopover(x, y);
+    setTimeout(() => $("ffab-ap-note").focus(), 50);
+  }
+
+  // Clicking a numbered marker reopens that remark: same popover, note
+  // prefilled, Save writes back onto the annotation instead of adding one.
+  function openEditPopover(a, x, y) {
+    editingNum = a.num;
+    $("ffab-ap-save").textContent = "💾 Save changes";
+    $("ffab-ap-ctx").innerHTML =
+      `<b>${escapeHtml(a.label)}</b><br>${escapeHtml(a.docCtx)}`;
+    $("ffab-ap-sel").textContent = a.selector;
+    $("ffab-ap-note").value = a.note;
+    show($("ffab-pop"));
+    placePopover(x, y);
     setTimeout(() => $("ffab-ap-note").focus(), 50);
   }
 
   function closePopover() {
     hide($("ffab-pop"));
     pendingTarget = null;
+    editingNum = null;
   }
 
   $("ffab-ap-cancel").addEventListener("click", closePopover);
   $("ffab-ap-save").addEventListener("click", async () => {
     const note = $("ffab-ap-note").value.trim();
-    if (!note || !pendingTarget) return;
+    if (!note) return;
+    if (editingNum != null) {
+      const a = annotations.find((x) => x.num === editingNum);
+      if (a) {
+        a.note = note;
+        await save();
+        render();
+      }
+      closePopover();
+      return;
+    }
+    if (!pendingTarget) return;
     annotations.push({ num: seq++, status: "open", note, ...pendingTarget, at: new Date().toISOString() });
     await save();
     closePopover();
@@ -504,7 +538,9 @@
       m.title = a.note;
       m.style.left = `${Math.min(r.right, innerWidth - 10)}px`;
       m.style.top = `${Math.max(r.top, 14)}px`;
-      m.addEventListener("click", () => show($("ffab-drawer")));
+      m.addEventListener("click", () =>
+        openEditPopover(a, parseFloat(m.style.left) + 18, parseFloat(m.style.top) + 14)
+      );
       box.appendChild(m);
     });
     // basket items get their own ✕ badge so marked-for-removal elements are

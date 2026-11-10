@@ -226,6 +226,20 @@ const HARNESS_JS = `
     click($("ffab-fab")); // put the drawer back as it was
     await sleep(30);
 
+    // 7f. clicking a numbered marker reopens the remark for editing
+    const marker = $("ffab-markers").querySelector(".ffab-marker");
+    check("the remark pins a numbered marker", !!marker && marker.textContent === "1");
+    click(marker);
+    await sleep(30);
+    check("marker click pops the comment back up", !$("ffab-pop").classList.contains("ffab-hidden"));
+    check("the popover carries the existing note",
+      $("ffab-ap-note").value === "make the Save button enabled once the email is valid");
+    $("ffab-ap-note").value = "make the Save button enabled once the email is valid (edited)";
+    click($("ffab-ap-save"));
+    await sleep(30);
+    check("saving writes the note back, adding no remark",
+      rec().annotations.length === 1 && rec().annotations[0].note.indexOf("(edited)") !== -1);
+
     // 8. the brief
     click($("ffab-dr-copy"));
     await sleep(60);
