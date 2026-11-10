@@ -29,6 +29,89 @@
     // its extension APIs are already gone — nothing to remove
   }
 
+  // In a subframe there is no pill or drawer to drive — the UI lives in the
+  // top frame. The subframe instance is a thin relay: highlight locally,
+  // swallow the press while armed, and forward the pick upward.
+  if (window.top !== window.self) {
+    relayPicks();
+    return;
+  }
+
+  /* ---------------- subframe relay ---------------- */
+
+  // A parent page cannot message a cross-origin child, so arming state is
+  // per-tab in the background: the top frame publishes it, subframes query it.
+  // Picks are forwarded topward the same way — child → background → top frame.
+  function relayPicks() {
+    let armed = null; // null | "remark" | "remove" | "step"
+    let lastQuery = 0;
+    const h = document.createElement("div");
+    h.style.cssText =
+      "position:fixed;pointer-events:none;border:2px solid #4f46e5;border-radius:4px;" +
+      "background:rgba(79,70,229,.08);z-index:2147483646;display:none;";
+    document.documentElement.appendChild(h);
+
+    async function syncState() {
+      const now = Date.now();
+      if (now - lastQuery < 400) return;
+      lastQuery = now;
+      try {
+        const st = await browser.runtime.sendMessage({ type: "ffab:pick-state?" });
+        armed = st && st.active ? st.mode : null;
+        if (!armed) h.style.display = "none";
+      } catch {
+        armed = null;
+      }
+    }
+
+    function onMove(e) {
+      syncState();
+      if (!armed) return;
+      const r = e.target.getBoundingClientRect();
+      h.style.left = `${r.left - 2}px`;
+      h.style.top = `${r.top - 2}px`;
+      h.style.width = `${r.width + 4}px`;
+      h.style.height = `${r.height + 4}px`;
+      h.style.display = "block";
+    }
+
+    function onDown(e) {
+      if (!armed) return;
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    async function onClick(e) {
+      await syncState();
+      if (!armed) return;
+      e.preventDefault();
+      e.stopPropagation();
+      lastQuery = 0; // re-arm the throttle so the next move sees fresh state
+      try {
+        await browser.runtime.sendMessage({
+          type: "ffab:relay-pick",
+          mode: armed,
+          target: { selector: buildSelector(e.target), ...describeElement(e.target) },
+        });
+      } catch {
+        /* the top frame is gone */
+      }
+    }
+
+    document.addEventListener("mousemove", onMove, true);
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("click", onClick, true);
+
+    const teardown = () => {
+      document.removeEventListener("mousemove", onMove, true);
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("click", onClick, true);
+      h.remove();
+      if (window.__ffabTeardown === teardown) delete window.__ffabTeardown;
+    };
+    window.__ffabTeardown = teardown;
+  }
+
   /* ---------------- storage ---------------- */
 
   // remarks are scoped to one page (query params ignored — they rarely
@@ -168,6 +251,17 @@
   let pickMode = null; // null | "remark" | "remove" | "step"
   let pendingTarget = null; // {selector, label, content, docCtx} while the popover is open
 
+  /** Publish the armed state so subframe relays can mirror the crosshair. */
+  function broadcastPickState() {
+    try {
+      browser.runtime
+        .sendMessage({ type: "ffab:pick-state", active: !!pickMode, mode: pickMode })
+        .catch(() => {});
+    } catch {
+      /* background not ready */
+    }
+  }
+
   function startPicking(mode) {
     pickMode = mode;
     document.body.classList.add("ffab-annotating");
@@ -181,6 +275,7 @@
     setPickButtons();
     hide($("ffab-drawer"));
     render(); // flip the FAB into basket-/step-counting mode
+    broadcastPickState();
   }
 
   function stopPicking() {
@@ -193,6 +288,7 @@
     setPickButtons();
     hide($("ffab-highlight"));
     render(); // restore the FAB from its removal-counting mode
+    broadcastPickState();
   }
 
   /** Reflect the armed pick mode on all three picker buttons (label + pressed style). */
@@ -227,6 +323,7 @@
   let hoverEl = null; // innermost element under the cursor
   let layerStack = []; // everything under the pointer, topmost first
   let pickLevel = 0; // index into layerStack currently highlighted
+  let lastPointer = { x: innerWidth / 2, y: innerHeight / 2 }; // where the popover goes
 
   function currentPick() {
     const el = layerStack[Math.min(pickLevel, layerStack.length - 1)];
@@ -249,6 +346,7 @@
 
   function onPickHover(e) {
     if (!pickMode) return;
+    lastPointer = { x: e.clientX, y: e.clientY };
     if (inUI(e.target)) {
       hide($("ffab-highlight"));
       return;
@@ -334,17 +432,21 @@
   /* ---------------- removal basket ---------------- */
 
   async function addToBasket(el) {
-    const selector = buildSelector(el);
-    const already = basket.some((b) => b.selector === selector);
+    await addBasketEntry({ selector: buildSelector(el), ...describeElement(el) });
+  }
+
+  // Descriptor form: picks relayed from a subframe arrive as data, not Elements.
+  async function addBasketEntry(target) {
+    const already = basket.some((b) => b.selector === target.selector);
     if (!already) {
-      basket.push({ selector, ...describeElement(el), at: new Date().toISOString() });
+      basket.push({ ...target, at: new Date().toISOString() });
       await save();
     }
     render();
     // The drawer is hidden while picking, so the marker appearing on the element
     // is the confirmation that it was basketed — and on a repeat pick the same
     // marker pops again, so a duplicate click reads as "already in there".
-    const marker = [...$("ffab-markers").children].find((m) => m.dataset.sel === selector);
+    const marker = [...$("ffab-markers").children].find((m) => m.dataset.sel === target.selector);
     if (marker) {
       marker.classList.add("ffab-marker-pop");
       setTimeout(() => marker.classList.remove("ffab-marker-pop"), 400);
@@ -354,9 +456,7 @@
   /* ---------------- walkthrough steps ---------------- */
 
   async function addStep(el) {
-    steps.push({ selector: buildSelector(el), ...describeElement(el), at: new Date().toISOString() });
-    await save();
-    render();
+    await addStepEntry({ selector: buildSelector(el), ...describeElement(el) });
     // The drawer is hidden while picking, so the FAB counter ticking up is the
     // confirmation that a pick landed; the highlight pulses once too, so a step
     // taken on the element the cursor is already resting on still reads as
@@ -366,6 +466,12 @@
     void h.offsetWidth; // restart the animation for a back-to-back pick
     h.classList.add("ffab-flash");
     setTimeout(() => h.classList.remove("ffab-flash"), 400);
+  }
+
+  async function addStepEntry(target) {
+    steps.push({ ...target, at: new Date().toISOString() });
+    await save();
+    render();
   }
 
   /* ---------------- selector & description ---------------- */
@@ -850,6 +956,20 @@
       } else {
         setDrawerOpen(false);
         show($("ffab-fab"));
+      }
+    }
+    // A pick made inside a subframe, forwarded by the background. The
+    // descriptor's coordinates are frame-local, so the popover goes where the
+    // cursor last was in THIS document — over the iframe element.
+    if (msg.type === "ffab:relay-pick" && pickMode) {
+      if (pickMode === "remove") {
+        addBasketEntry(msg.target);
+      } else if (pickMode === "step") {
+        addStepEntry(msg.target);
+      } else {
+        pendingTarget = msg.target;
+        stopPicking();
+        openPopover(lastPointer.x, lastPointer.y);
       }
     }
   }

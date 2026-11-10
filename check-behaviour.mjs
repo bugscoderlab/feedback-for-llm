@@ -76,7 +76,11 @@ const HARNESS_JS = `
       },
     },
     runtime: {
-      sendMessage: async () => {},
+      sendMessage: async (msg) => {
+        window.__lastMsg = msg;
+        if (msg && msg.type === "ffab:pick-state?") return window.__pickState ?? { active: false };
+        return {};
+      },
       onMessage: {
         addListener: (fn) => { msgListener = fn; },
         removeListener: (fn) => { if (msgListener === fn) msgListener = null; },
@@ -240,6 +244,40 @@ const HARNESS_JS = `
     check("saving writes the note back, adding no remark",
       rec().annotations.length === 1 && rec().annotations[0].note.indexOf("(edited)") !== -1);
 
+    // 7g. picking reaches inside iframes: the subframe relay mirrors the
+    // crosshair and forwards the pick to the top frame. The harness is not a
+    // real extension install, so inject the script into the frame by hand and
+    // hand it the stubbed browser API, mimicking what all_frames injection
+    // would do.
+    const fdoc = $("demo-frame").contentDocument;
+    fdoc.defaultView.browser = window.browser; // the API the relay talks to
+    const fscript = fdoc.createElement("script");
+    await new Promise((res) => { fscript.onload = res; fscript.src = "content.js"; fdoc.body.appendChild(fscript); });
+    const fbtn = fdoc.getElementById("in-frame-btn");
+    const F = fdoc.defaultView;
+    check("the test frame is reachable", !!fbtn);
+    click($("ffab-dr-pick"));
+    window.__pickState = { active: true, mode: "remark" }; // what the background would answer
+    fbtn.dispatchEvent(new F.MouseEvent("mousemove", { bubbles: true, clientX: 12, clientY: 8 }));
+    await sleep(120); // relay syncs its armed state
+    const fdown = new F.MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 });
+    fbtn.dispatchEvent(fdown);
+    check("the relay swallows the press inside the frame", fdown.defaultPrevented);
+    fbtn.dispatchEvent(new F.MouseEvent("click", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }));
+    await sleep(120);
+    check("the relayed pick names the in-frame element",
+      window.__lastMsg?.type === "ffab:relay-pick" && window.__lastMsg.target?.selector === "#in-frame-btn",
+      JSON.stringify(window.__lastMsg));
+    msgListener(window.__lastMsg); // the background forwards it to the top frame
+    await sleep(30);
+    check("the top frame opens the popover for it",
+      !$("ffab-pop").classList.contains("ffab-hidden") && $("ffab-ap-sel").textContent.trim() === "#in-frame-btn");
+    click($("ffab-ap-cancel"));
+    await sleep(30);
+    window.__pickState = { active: false };
+    click($("ffab-fab")); // put the drawer back as it was
+    await sleep(30);
+
     // 8. the brief
     click($("ffab-dr-copy"));
     await sleep(60);
@@ -397,6 +435,7 @@ function harnessHtml() {
       <div id="layer-back" style="position:absolute;inset:0;background:#fee">back</div>
       <div id="layer-front" style="position:absolute;inset:0">front</div>
     </div>
+    <iframe id="demo-frame" srcdoc="<button id='in-frame-btn'>Inside frame</button>"></iframe>
   </div>
 <script>
 ${HARNESS_JS}

@@ -51,6 +51,7 @@ function makeBrowser({ onSend, onInject }) {
     tabs: {
       onUpdated: { addListener: (fn) => listeners.updated.push(fn) },
       onActivated: { addListener: (fn) => listeners.activated.push(fn) },
+      onRemoved: { addListener: () => {} },
       get: async (id) => ({ id, url: browser.__tabUrls?.[id] }),
       sendMessage: async (...args) => {
         calls.sendMessage.push(args);

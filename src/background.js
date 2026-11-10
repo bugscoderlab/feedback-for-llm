@@ -48,12 +48,31 @@ browser.browserAction.onClicked.addListener(async (tab) => {
   }
 });
 
-browser.runtime.onMessage.addListener((msg) => {
+// Per-tab armed-pick state, mirrored from the top frame for subframe relays:
+// a parent page cannot message a cross-origin child, so relays pull the state
+// from here, and their picks round-trip through here up to the top frame.
+const pickStates = new Map();
+
+browser.runtime.onMessage.addListener((msg, sender) => {
   if (msg.type === "ffab:badge" && typeof msg.count === "number") {
     browser.browserAction.setBadgeText({ text: msg.count ? String(msg.count) : "" });
     browser.browserAction.setBadgeBackgroundColor({ color: "#4f46e5" });
   }
+  if (msg.type === "ffab:pick-state" && sender.tab) {
+    pickStates.set(sender.tab.id, { active: msg.active, mode: msg.mode });
+    return;
+  }
+  if (msg.type === "ffab:pick-state?" && sender.tab) {
+    return Promise.resolve(pickStates.get(sender.tab.id) ?? { active: false });
+  }
+  if (msg.type === "ffab:relay-pick" && sender.tab) {
+    // a subframe's pick — deliver it to the top frame's UI
+    browser.tabs.sendMessage(sender.tab.id, msg, { frameId: 0 }).catch(() => {});
+    return;
+  }
 });
+
+browser.tabs.onRemoved.addListener((tabId) => pickStates.delete(tabId));
 
 /* Local files: Firefox never lets extension content into file:// documents —
  * no permission grants access (verified empirically against a signed permanent

@@ -15,7 +15,12 @@ agent as a markdown brief.
   highlight up through the stack of elements under the cursor
   (`elementsFromPoint` — nested parents *and* overlapping siblings),
   Shift+Tab/`[` back down. The press itself is swallowed, so native `<select>`
-  dropdowns and other controls don't react while you aim.
+  dropdowns and other controls don't react while you aim. Inside an **iframe**
+  (same- or cross-origin) a lightweight relay takes over: it paints the
+  highlight in the frame, swallows the press, and forwards the pick — the
+  popover still opens in the top page. A parent cannot message a cross-origin
+  child, so arming state lives per-tab in the background; the top frame
+  publishes it and subframes pull it (see `background.js`).
 - **🚫 Remove element** — the same crosshair (the highlight turns red), but
   each click skips the popover and drops the element straight into the **removal
   basket**: no note to write, no per-element form. The picker stays armed so you can
@@ -132,7 +137,7 @@ npx web-ext run            # launches Firefox with the extension, auto-reloads o
 | File | Role |
 | --- | --- |
 | `manifest.json` | MV2 manifest: content script on all URLs, storage, background |
-| `background.js` | Toolbar click → toggle pill, injecting the content script on demand if the tab isn't ready; open-remark badge |
+| `background.js` | Toolbar click → toggle pill, injecting the content script on demand if the tab isn't ready; open-remark badge; per-tab pick state + pick relay for subframes (iframes) |
 | `content.js` | Picking (remark / remove / step), selectors, descriptions, popover, drawer, markers, export |
 | `popup.html` / `popup.js` | What the toolbar button shows on `file://` tabs, where Firefox forbids extension content: the platform restriction plus the http-server workaround |
 | `feedback.css` | Prototype-styled UI, `ffab-`-prefixed |

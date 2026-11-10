@@ -12,7 +12,8 @@ GitHub Releases.
   **`]`** walk the highlight up through everything stacked under the cursor —
   nested parents *and* overlapping siblings — Shift+Tab/`[` back down, so the
   exact layer you mean is reachable without hovering bare padding; **Esc**
-  cancels.
+  cancels. Works inside **iframes** too (same- or cross-origin): a thin relay
+  in each subframe mirrors the crosshair and forwards the pick to the popover.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
   and drop straight into a removal basket (red ✕ markers), one after another, until
   you press Esc.
