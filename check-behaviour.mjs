@@ -329,20 +329,20 @@ const HARNESS_JS = `
     click($("ffab-dr-clear"));
     await sleep(50);
     check("clear all asks before wiping",
-      rec().steps.length === 4 && !$("ffab-dr-clear-ask").classList.contains("ffab-hidden")
+      rec().steps.length === 4 && !$("ffab-dr-ask").classList.contains("ffab-hidden")
         && $("ffab-dr-clear").classList.contains("ffab-hidden"));
     check("clear all raises no dialog",
       (window.__confirms || []).length === dialogsBefore && (window.__alerts || []).length === 0,
       JSON.stringify([window.__confirms || [], window.__alerts || []]));
-    click($("ffab-dr-clear-no"));
+    click($("ffab-dr-ask-no"));
     await sleep(30);
     check("cross cancels the wipe",
-      $("ffab-dr-clear-ask").classList.contains("ffab-hidden")
+      $("ffab-dr-ask").classList.contains("ffab-hidden")
         && !$("ffab-dr-clear").classList.contains("ffab-hidden")
         && rec().steps.length === 4);
     click($("ffab-dr-clear"));
     await sleep(30);
-    click($("ffab-dr-clear-yes"));
+    click($("ffab-dr-ask-yes"));
     await sleep(50);
     check("tick clears", rec().steps.length === 0);
     check("clear all empties the stored steps", rec().steps.length === 0, JSON.stringify(rec().steps));
@@ -379,11 +379,11 @@ const HARNESS_JS = `
     await sleep(30);
     check("a third run records again", rec().steps.length === 1);
     click($("ffab-dr-clear"));
-    check("clear all asks", !$("ffab-dr-clear-ask").classList.contains("ffab-hidden"));
-    click($("ffab-dr-clear-no"));
+    check("clear all asks", !$("ffab-dr-ask").classList.contains("ffab-hidden"));
+    click($("ffab-dr-ask-no"));
     await sleep(30);
     check("cross stands the ask down",
-      $("ffab-dr-clear-ask").classList.contains("ffab-hidden")
+      $("ffab-dr-ask").classList.contains("ffab-hidden")
         && !$("ffab-dr-clear").classList.contains("ffab-hidden"));
     check("the cancelled ask did not clear anything", rec().steps.length === 1);
 
@@ -396,6 +396,59 @@ const HARNESS_JS = `
     check("a locate that fails says so on its button",
       locateBtn.textContent.indexOf("not here") !== -1, locateBtn.textContent);
     check("a locate that fails raises no dialog", (window.__alerts || []).length === alertCount);
+
+    // 14. Load round-trips the record through a JSON file (picker driven by
+    //    feeding the input a File, exactly what the user picks)
+    click($("ffab-dr-load"));
+    await sleep(30);
+    check("load asks before replacing existing feedback",
+      !$("ffab-dr-ask").classList.contains("ffab-hidden")
+        && $("ffab-dr-load").classList.contains("ffab-hidden"));
+    click($("ffab-dr-ask-yes"));
+    await sleep(30);
+    const inp = document.querySelector("input[type=file]");
+    check("load opens a file picker", !!inp);
+    const fileRec = {
+      app: "feedback-for-llm",
+      format: 1,
+      annotations: [
+        { num: 1, status: "open", note: "loaded from file", selector: "#email",
+          label: "input “Email”", docCtx: "Invoice scanner · /index.html", content: "", at: new Date().toISOString() },
+      ],
+      seq: 2,
+      basket: [],
+      steps: [
+        { selector: "#save", label: "button “Save”", docCtx: "Invoice scanner · /index.html", content: "", at: new Date().toISOString() },
+      ],
+      review: "loaded review",
+    };
+    const dt = new DataTransfer();
+    dt.items.add(new File([JSON.stringify(fileRec)], "feedback.json", { type: "application/json" }));
+    Object.defineProperty(inp, "files", { configurable: true, value: dt.files });
+    inp.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 60 && $("ffab-dr-load").textContent.indexOf("Loaded") === -1; i++) await sleep(50);
+    check("load replaces the record",
+      rec().annotations.length === 1 && rec().annotations[0].note === "loaded from file");
+    check("load restores steps, review, and seq",
+      rec().steps.length === 1 && rec().review === "loaded review" && rec().seq === 2);
+    check("the review box shows the loaded review", $("ffab-dr-review-note").value === "loaded review");
+    check("load reports on its own button", $("ffab-dr-load").textContent.indexOf("Loaded") !== -1,
+      $("ffab-dr-load").textContent);
+    // and a bad file is refused, not fatal
+    const dt2 = new DataTransfer();
+    dt2.items.add(new File(["{\\"nope\\":true}"], "bad.json", { type: "application/json" }));
+    pickAgain: {
+      $("ffab-dr-load").dispatchEvent(new MouseEvent("click", { bubbles: true })); // record non-empty now -> asks
+      click($("ffab-dr-ask-yes"));
+      await sleep(30);
+      const inp2 = document.querySelector("input[type=file]");
+      Object.defineProperty(inp2, "files", { configurable: true, value: dt2.files });
+      inp2.dispatchEvent(new Event("change", { bubbles: true }));
+      for (let i = 0; i < 60 && $("ffab-dr-load").textContent.indexOf("Not a feedback") === -1; i++) await sleep(50);
+    }
+    check("a non-feedback file is refused without touching the record",
+      rec().annotations.length === 1 && $("ffab-dr-load").textContent.indexOf("Not a feedback") !== -1,
+      $("ffab-dr-load").textContent);
 
     const out = document.createElement("pre");
     out.id = "result";

@@ -219,10 +219,12 @@
       <div class="ffab-dr-actions">
         <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy</button>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
+        <button class="ffab-btn ffab-ghost" id="ffab-dr-save">💾 Save</button>
+        <button class="ffab-btn ffab-ghost" id="ffab-dr-load">📂 Load</button>
         <button class="ffab-btn ffab-ghost ffab-hidden" id="ffab-dr-clear">🗑 Clear all</button>
-        <span id="ffab-dr-clear-ask" class="ffab-hidden">Confirm?
-          <button class="ffab-btn ffab-yes" id="ffab-dr-clear-yes" title="Yes, clear everything">✓</button>
-          <button class="ffab-btn ffab-no" id="ffab-dr-clear-no" title="No, keep everything">✕</button>
+        <span id="ffab-dr-ask" class="ffab-hidden">Confirm?
+          <button class="ffab-btn ffab-yes" id="ffab-dr-ask-yes" title="Yes, go ahead">✓</button>
+          <button class="ffab-btn ffab-no" id="ffab-dr-ask-no" title="No, cancel">✕</button>
         </span>
       </div>
       <div class="ffab-dr-steps ffab-hidden" id="ffab-dr-steps"></div>
@@ -690,7 +692,7 @@
   /** Clear all is offered only when there is something to clear. */
   function syncClearAll() {
     const any = !!(annotations.length || basket.length || steps.length || review.trim());
-    if (!any) clearAsk(false); // a hidden button must not come back with its ask open
+    if (!any) closeAsk(); // a hidden button must not come back with its ask open
     $("ffab-dr-clear").classList.toggle("ffab-hidden", !any);
   }
 
@@ -942,7 +944,7 @@
       show($("ffab-fab")); // the pill is the drawer's handle, so it is always there
     } else {
       hide($("ffab-drawer"));
-      clearAsk(false); // closing the drawer must never strand the confirm chip
+      closeAsk(); // closing the drawer must never strand the confirm chip
       stopPicking(); // closing the drawer should never strand the picker armed
     }
   }
@@ -1068,27 +1070,36 @@
 
   $("ffab-dr-copy").addEventListener("click", copyFeedback);
   $("ffab-dr-download").addEventListener("click", downloadFeedback);
-  // Clearing everything is destructive, but confirm() is the wrong tool for it:
-  // Firefox stops showing dialogs for a page that has already shown a few, and a
-  // suppressed confirm() returns false with nothing on screen to explain it —
-  // the button looks broken from then on. So the button asks in place instead:
-  // it swaps for an explicit ✓/✕ pair. ✓ wipes everything; ✕ (or closing the
-  // drawer) backs out untouched.
-  function clearAsk(show) {
-    $("ffab-dr-clear").classList.toggle("ffab-hidden", show);
-    $("ffab-dr-clear-ask").classList.toggle("ffab-hidden", !show);
+  // Destructive actions (Clear all, Load over existing feedback) ask in place
+  // with an explicit ✓/✕ pair instead of confirm() — Firefox stops showing
+  // dialogs for a page that has already shown a few, and a suppressed confirm()
+  // returns false with nothing on screen to explain it.
+  let askInvoker = null; // button the chip is standing in for
+  let askYes = null; // what ✓ runs
+
+  function askConfirm(invokerId, yes) {
+    closeAsk();
+    askInvoker = invokerId;
+    askYes = yes;
+    $(invokerId).classList.add("ffab-hidden");
+    $("ffab-dr-ask").classList.remove("ffab-hidden");
   }
 
-  $("ffab-dr-clear").addEventListener("click", () => {
-    const empty = !annotations.length && !basket.length && !steps.length && !review.trim();
-    if (empty) return;
-    clearAsk(true);
+  function closeAsk() {
+    $("ffab-dr-ask").classList.add("ffab-hidden");
+    if (askInvoker) $(askInvoker).classList.remove("ffab-hidden");
+    askInvoker = null;
+    askYes = null;
+  }
+
+  $("ffab-dr-ask-yes").addEventListener("click", () => {
+    const yes = askYes;
+    closeAsk();
+    if (yes) yes();
   });
+  $("ffab-dr-ask-no").addEventListener("click", closeAsk);
 
-  $("ffab-dr-clear-no").addEventListener("click", () => clearAsk(false));
-
-  $("ffab-dr-clear-yes").addEventListener("click", async () => {
-    clearAsk(false);
+  async function clearEverything() {
     annotations = [];
     basket = [];
     steps = [];
@@ -1097,7 +1108,89 @@
     $("ffab-dr-review-note").value = "";
     await save();
     render();
+  }
+
+  $("ffab-dr-clear").addEventListener("click", () => {
+    const empty = !annotations.length && !basket.length && !steps.length && !review.trim();
+    if (empty) return;
+    askConfirm("ffab-dr-clear", clearEverything);
   });
+
+  /* ---------------- feedback file save / load ---------------- */
+
+  // The markdown brief is for reading; this is the round-trippable form —
+  // the full record (remarks, steps, review, basket) as JSON, loadable back
+  // onto this or any other page.
+  $("ffab-dr-save").addEventListener("click", () => {
+    const rec = {
+      app: "feedback-for-llm",
+      format: 1,
+      exported: new Date().toISOString(),
+      pageKey,
+      annotations,
+      seq,
+      basket,
+      steps,
+      review,
+    };
+    const blob = new Blob([JSON.stringify(rec, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `feedback-${location.hostname || "page"}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    flashButton($("ffab-dr-save"), "✓ Saved", true);
+  });
+
+  $("ffab-dr-load").addEventListener("click", () => {
+    const empty = !annotations.length && !basket.length && !steps.length && !review.trim();
+    if (empty) pickFeedbackFile();
+    else askConfirm("ffab-dr-load", pickFeedbackFile); // loading replaces the record
+  });
+
+  function pickFeedbackFile() {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "application/json,.json";
+    inp.style.display = "none";
+    document.documentElement.appendChild(inp);
+    inp.addEventListener("change", async () => {
+      const f = inp.files && inp.files[0];
+      inp.remove();
+      if (!f) return;
+      try {
+        // FileReader rather than File.text(): the older API resolves in every
+        // context (the harness's file:// page hangs Blob.text for larger
+        // payloads), and it is the conservative choice for a file the user
+        // just picked.
+        const text = await new Promise((res, rej) => {
+          const rd = new FileReader();
+          rd.onload = () => res(rd.result);
+          rd.onerror = () => rej(rd.error);
+          rd.readAsText(f);
+        });
+        const rec = JSON.parse(text);
+        if (!rec || !Array.isArray(rec.annotations)) throw new Error("not a feedback file");
+        annotations = rec.annotations;
+        basket = Array.isArray(rec.basket) ? rec.basket : [];
+        steps = Array.isArray(rec.steps) ? rec.steps : [];
+        review = typeof rec.review === "string" ? rec.review : "";
+        seq =
+          typeof rec.seq === "number"
+            ? rec.seq
+            : annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
+        dirty = true; // the async load() must not lay storage back over this
+        loaded = true;
+        $("ffab-dr-review-note").value = review;
+        await save();
+        render();
+        flashButton($("ffab-dr-load"), "✓ Loaded", true);
+      } catch (e) {
+        flashButton($("ffab-dr-load"), "⚠ Not a feedback file", false);
+      }
+    });
+    inp.click();
+  }
 
   /* ---------------- helpers ---------------- */
 
