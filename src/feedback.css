@@ -296,6 +296,26 @@ body.ffab-stepping #ffab-highlight {
   flex-wrap: wrap;
 }
 #ffab-dr-clear.ffab-hidden { display: none; }
+/* The paste box Load opens: a reviewer can send the JSON through chat or
+   email, and loading it needs no file picker — just Ctrl-V. */
+#ffab-dr-loadbox { padding: 8px 16px 10px; border-bottom: 1px solid #e3e6ec; }
+#ffab-dr-loadbox.ffab-hidden { display: none; }
+#ffab-dr-loadbox .ffab-lb-note { font-size: 11px; color: #b45309; background: #fdf3e3; border-radius: 6px; padding: 4px 8px; margin-bottom: 6px; }
+#ffab-dr-loadbox .ffab-lb-note:empty { display: none; }
+#ffab-dr-loadbox textarea {
+  width: 100%;
+  min-height: 64px;
+  font: inherit;
+  font-size: 11px;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 8px;
+  border: 1px solid #e3e6ec;
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+  color: #1a2233;
+}
+#ffab-dr-loadbox .ffab-row { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
 /* The in-place confirm shared by destructive actions (Clear all, Load over
    existing feedback): an explicit ✓/✕ choice instead of a dialog or a
    re-click arm. Sized to a button's own slot so the swap never re-wraps the

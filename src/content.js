@@ -227,6 +227,14 @@
           <button class="ffab-btn ffab-no" id="ffab-dr-ask-no" title="No, cancel">✕</button>
         </span>
       </div>
+      <div class="ffab-dr-loadbox ffab-hidden" id="ffab-dr-loadbox">
+        <div class="ffab-lb-note" id="ffab-dr-loadnote">Paste the feedback JSON below.</div>
+        <textarea id="ffab-dr-loadtext" placeholder='{"app":"feedback-for-llm", …}'></textarea>
+        <div class="ffab-row">
+          <button class="ffab-btn ffab-ghost" id="ffab-dr-load-cancel">Cancel</button>
+          <button class="ffab-btn ffab-primary" id="ffab-dr-load-go">✓ Load</button>
+        </div>
+      </div>
       <div class="ffab-dr-steps ffab-hidden" id="ffab-dr-steps"></div>
       <div class="ffab-dr-review ffab-hidden" id="ffab-dr-review">
         <div class="ffab-rv-head">Review</div>
@@ -417,6 +425,10 @@
       return;
     }
     if (e.key === "Escape") {
+      if (!$("ffab-dr-loadbox").classList.contains("ffab-hidden")) {
+        closeLoadBox();
+        return;
+      }
       // A finished run is followed by writing, so Esc puts the drawer — and the
       // review box under the steps — in front of the reviewer instead of leaving
       // them on the bare crosshair with the pill as the only way back.
@@ -945,6 +957,7 @@
     } else {
       hide($("ffab-drawer"));
       closeAsk(); // closing the drawer must never strand the confirm chip
+      closeLoadBox();
       stopPicking(); // closing the drawer should never strand the picker armed
     }
   }
@@ -1143,53 +1156,53 @@
   });
 
   $("ffab-dr-load").addEventListener("click", () => {
+    const box = $("ffab-dr-loadbox");
+    const open = box.classList.contains("ffab-hidden");
+    if (!open) return closeLoadBox();
+    closeAsk();
+    box.classList.remove("ffab-hidden");
     const empty = !annotations.length && !basket.length && !steps.length && !review.trim();
-    if (empty) pickFeedbackFile();
-    else askConfirm("ffab-dr-load", pickFeedbackFile); // loading replaces the record
+    $("ffab-dr-loadnote").textContent = empty
+      ? "Paste the feedback JSON below."
+      : "Loading replaces the current feedback on this page.";
+    setTimeout(() => $("ffab-dr-loadtext").focus(), 50);
   });
 
-  function pickFeedbackFile() {
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "application/json,.json";
-    inp.style.display = "none";
-    document.documentElement.appendChild(inp);
-    inp.addEventListener("change", async () => {
-      const f = inp.files && inp.files[0];
-      inp.remove();
-      if (!f) return;
-      try {
-        // FileReader rather than File.text(): the older API resolves in every
-        // context (the harness's file:// page hangs Blob.text for larger
-        // payloads), and it is the conservative choice for a file the user
-        // just picked.
-        const text = await new Promise((res, rej) => {
-          const rd = new FileReader();
-          rd.onload = () => res(rd.result);
-          rd.onerror = () => rej(rd.error);
-          rd.readAsText(f);
-        });
-        const rec = JSON.parse(text);
-        if (!rec || !Array.isArray(rec.annotations)) throw new Error("not a feedback file");
-        annotations = rec.annotations;
-        basket = Array.isArray(rec.basket) ? rec.basket : [];
-        steps = Array.isArray(rec.steps) ? rec.steps : [];
-        review = typeof rec.review === "string" ? rec.review : "";
-        seq =
-          typeof rec.seq === "number"
-            ? rec.seq
-            : annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
-        dirty = true; // the async load() must not lay storage back over this
-        loaded = true;
-        $("ffab-dr-review-note").value = review;
-        await save();
-        render();
-        flashButton($("ffab-dr-load"), "✓ Loaded", true);
-      } catch (e) {
-        flashButton($("ffab-dr-load"), "⚠ Not a feedback file", false);
-      }
-    });
-    inp.click();
+  $("ffab-dr-load-cancel").addEventListener("click", closeLoadBox);
+
+  $("ffab-dr-load-go").addEventListener("click", async () => {
+    try {
+      await applyLoadedRecord(JSON.parse($("ffab-dr-loadtext").value));
+      closeLoadBox();
+      flashButton($("ffab-dr-load"), "✓ Loaded", true);
+    } catch {
+      flashButton($("ffab-dr-load-go"), "⚠ Not a feedback JSON", false);
+    }
+  });
+
+  function closeLoadBox() {
+    $("ffab-dr-loadbox").classList.add("ffab-hidden");
+    $("ffab-dr-loadtext").value = "";
+  }
+
+  // Shared by every load path: validate and adopt a record. Sets dirty and
+  // loaded so the async storage load() can never lay the old record back over
+  // this, and so save() actually writes.
+  async function applyLoadedRecord(rec) {
+    if (!rec || !Array.isArray(rec.annotations)) throw new Error("not a feedback record");
+    annotations = rec.annotations;
+    basket = Array.isArray(rec.basket) ? rec.basket : [];
+    steps = Array.isArray(rec.steps) ? rec.steps : [];
+    review = typeof rec.review === "string" ? rec.review : "";
+    seq =
+      typeof rec.seq === "number"
+        ? rec.seq
+        : annotations.reduce((m, a) => Math.max(m, a.num || 0), 0) + 1;
+    dirty = true; // the async load() must not lay storage back over this
+    loaded = true;
+    $("ffab-dr-review-note").value = review;
+    await save();
+    render();
   }
 
   /* ---------------- helpers ---------------- */

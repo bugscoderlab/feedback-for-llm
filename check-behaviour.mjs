@@ -397,22 +397,18 @@ const HARNESS_JS = `
       locateBtn.textContent.indexOf("not here") !== -1, locateBtn.textContent);
     check("a locate that fails raises no dialog", (window.__alerts || []).length === alertCount);
 
-    // 14. Load round-trips the record through a JSON file (picker driven by
-    //    feeding the input a File, exactly what the user picks)
+    // 14. Load round-trips the record through pasted JSON — the way a review
+    //     travels between people: Save copies JSON, Load pastes it back
     click($("ffab-dr-load"));
     await sleep(30);
-    check("load asks before replacing existing feedback",
-      !$("ffab-dr-ask").classList.contains("ffab-hidden")
-        && $("ffab-dr-load").classList.contains("ffab-hidden"));
-    click($("ffab-dr-ask-yes"));
-    await sleep(30);
-    const inp = document.querySelector("input[type=file]");
-    check("load opens a file picker", !!inp);
+    check("load opens the paste box",
+      !$("ffab-dr-loadbox").classList.contains("ffab-hidden")
+        && $("ffab-dr-loadnote").textContent.indexOf("replaces") !== -1);
     const fileRec = {
       app: "feedback-for-llm",
       format: 1,
       annotations: [
-        { num: 1, status: "open", note: "loaded from file", selector: "#email",
+        { num: 1, status: "open", note: "loaded from paste", selector: "#email",
           label: "input “Email”", docCtx: "Invoice scanner · /index.html", content: "", at: new Date().toISOString() },
       ],
       seq: 2,
@@ -422,33 +418,30 @@ const HARNESS_JS = `
       ],
       review: "loaded review",
     };
-    const dt = new DataTransfer();
-    dt.items.add(new File([JSON.stringify(fileRec)], "feedback.json", { type: "application/json" }));
-    Object.defineProperty(inp, "files", { configurable: true, value: dt.files });
-    inp.dispatchEvent(new Event("change", { bubbles: true }));
-    for (let i = 0; i < 60 && $("ffab-dr-load").textContent.indexOf("Loaded") === -1; i++) await sleep(50);
+    $("ffab-dr-loadtext").value = JSON.stringify(fileRec);
+    click($("ffab-dr-load-go"));
+    await sleep(80);
     check("load replaces the record",
-      rec().annotations.length === 1 && rec().annotations[0].note === "loaded from file");
+      rec().annotations.length === 1 && rec().annotations[0].note === "loaded from paste");
     check("load restores steps, review, and seq",
       rec().steps.length === 1 && rec().review === "loaded review" && rec().seq === 2);
     check("the review box shows the loaded review", $("ffab-dr-review-note").value === "loaded review");
-    check("load reports on its own button", $("ffab-dr-load").textContent.indexOf("Loaded") !== -1,
+    check("load closes the box and reports on its own button",
+      $("ffab-dr-loadbox").classList.contains("ffab-hidden")
+        && $("ffab-dr-load").textContent.indexOf("Loaded") !== -1,
       $("ffab-dr-load").textContent);
-    // and a bad file is refused, not fatal
-    const dt2 = new DataTransfer();
-    dt2.items.add(new File(["{\\"nope\\":true}"], "bad.json", { type: "application/json" }));
-    pickAgain: {
-      $("ffab-dr-load").dispatchEvent(new MouseEvent("click", { bubbles: true })); // record non-empty now -> asks
-      click($("ffab-dr-ask-yes"));
-      await sleep(30);
-      const inp2 = document.querySelector("input[type=file]");
-      Object.defineProperty(inp2, "files", { configurable: true, value: dt2.files });
-      inp2.dispatchEvent(new Event("change", { bubbles: true }));
-      for (let i = 0; i < 60 && $("ffab-dr-load").textContent.indexOf("Not a feedback") === -1; i++) await sleep(50);
-    }
-    check("a non-feedback file is refused without touching the record",
-      rec().annotations.length === 1 && $("ffab-dr-load").textContent.indexOf("Not a feedback") !== -1,
-      $("ffab-dr-load").textContent);
+    // and bad JSON is refused, not fatal
+    click($("ffab-dr-load"));
+    await sleep(30);
+    $("ffab-dr-loadtext").value = "{\\"nope\\":true}";
+    click($("ffab-dr-load-go"));
+    await sleep(80);
+    check("a non-feedback JSON is refused without touching the record",
+      rec().annotations.length === 1 && $("ffab-dr-load-go").textContent.indexOf("Not a feedback") !== -1,
+      $("ffab-dr-load-go").textContent);
+    click($("ffab-dr-load-cancel"));
+    await sleep(30);
+    check("cancel closes the paste box", $("ffab-dr-loadbox").classList.contains("ffab-hidden"));
 
     const out = document.createElement("pre");
     out.id = "result";
