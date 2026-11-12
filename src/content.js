@@ -218,8 +218,11 @@
       </div>
       <div class="ffab-dr-actions">
         <button class="ffab-btn ffab-ghost" id="ffab-dr-copy">📋 Copy</button>
-        <button class="ffab-btn ffab-ghost" id="ffab-dr-download">⬇ feedback.md</button>
-        <button class="ffab-btn ffab-ghost" id="ffab-dr-save">💾 Save</button>
+        <button class="ffab-btn ffab-ghost" id="ffab-dr-save">⬇ Save</button>
+        <span id="ffab-dr-fmt" class="ffab-hidden">
+          <button class="ffab-btn ffab-fmt" id="ffab-dr-fmt-md" title="Markdown brief for the LLM">📝 md</button>
+          <button class="ffab-btn ffab-fmt" id="ffab-dr-fmt-json" title="Full record — loadable again later">🧾 json</button>
+        </span>
         <button class="ffab-btn ffab-ghost" id="ffab-dr-load">📂 Load</button>
         <button class="ffab-btn ffab-ghost ffab-hidden" id="ffab-dr-clear">🗑 Clear all</button>
         <span id="ffab-dr-ask" class="ffab-hidden">Confirm?
@@ -425,6 +428,10 @@
       return;
     }
     if (e.key === "Escape") {
+      if (!$("ffab-dr-fmt").classList.contains("ffab-hidden")) {
+        closeFmt();
+        return;
+      }
       if (!$("ffab-dr-loadbox").classList.contains("ffab-hidden")) {
         closeLoadBox();
         return;
@@ -957,6 +964,7 @@
     } else {
       hide($("ffab-drawer"));
       closeAsk(); // closing the drawer must never strand the confirm chip
+      closeFmt(); // …or the format chooser
       closeLoadBox();
       stopPicking(); // closing the drawer should never strand the picker armed
     }
@@ -1082,8 +1090,7 @@
   }
 
   $("ffab-dr-copy").addEventListener("click", copyFeedback);
-  $("ffab-dr-download").addEventListener("click", downloadFeedback);
-  // Destructive actions (Clear all, Load over existing feedback) ask in place
+  // Destructive actions (Clear all) ask in place
   // with an explicit ✓/✕ pair instead of confirm() — Firefox stops showing
   // dialogs for a page that has already shown a few, and a suppressed confirm()
   // returns false with nothing on screen to explain it.
@@ -1129,12 +1136,34 @@
     askConfirm("ffab-dr-clear", clearEverything);
   });
 
-  /* ---------------- feedback file save / load ---------------- */
+  /* ---------------- feedback export / load ---------------- */
 
-  // The markdown brief is for reading; this is the round-trippable form —
-  // the full record (remarks, steps, review, basket) as JSON, loadable back
-  // onto this or any other page.
+  // One Save button, two formats: the button swaps in place for a md/json
+  // pair (same slot, so the row never re-wraps). Markdown is the brief for
+  // reading; JSON is the full record, loadable again later.
+  function openFmt() {
+    $("ffab-dr-save").classList.add("ffab-hidden");
+    $("ffab-dr-fmt").classList.remove("ffab-hidden");
+  }
+
+  function closeFmt() {
+    $("ffab-dr-fmt").classList.add("ffab-hidden");
+    $("ffab-dr-save").classList.remove("ffab-hidden");
+  }
+
   $("ffab-dr-save").addEventListener("click", () => {
+    if (!$("ffab-dr-fmt").classList.contains("ffab-hidden")) return closeFmt(); // toggle back
+    closeAsk();
+    openFmt();
+  });
+
+  $("ffab-dr-fmt-md").addEventListener("click", () => {
+    closeFmt();
+    downloadFeedback();
+  });
+
+  $("ffab-dr-fmt-json").addEventListener("click", () => {
+    closeFmt();
     const rec = {
       app: "feedback-for-llm",
       format: 1,
@@ -1152,7 +1181,6 @@
     a.download = `feedback-${location.hostname || "page"}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
-    flashButton($("ffab-dr-save"), "✓ Saved", true);
   });
 
   $("ffab-dr-load").addEventListener("click", () => {

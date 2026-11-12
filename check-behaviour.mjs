@@ -397,6 +397,15 @@ const HARNESS_JS = `
       locateBtn.textContent.indexOf("not here") !== -1, locateBtn.textContent);
     check("a locate that fails raises no dialog", (window.__alerts || []).length === alertCount);
 
+    // 13b. Save swaps in place for a format choice; Esc restores the button
+    click($("ffab-dr-save"));
+    check("save offers md or json",
+      !$("ffab-dr-fmt").classList.contains("ffab-hidden") && $("ffab-dr-save").classList.contains("ffab-hidden"));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await sleep(30);
+    check("Esc restores the save button",
+      $("ffab-dr-fmt").classList.contains("ffab-hidden") && !$("ffab-dr-save").classList.contains("ffab-hidden"));
+
     // 14. Load round-trips the record through pasted JSON — the way a review
     //     travels between people: Save copies JSON, Load pastes it back
     click($("ffab-dr-load"));

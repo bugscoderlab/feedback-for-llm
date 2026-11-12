@@ -26,15 +26,13 @@ GitHub Releases.
   reloads and restarts).
 - **Drawer** — locate / resolve / reopen / delete remarks, unmark basketed elements,
   locate or drop individual steps, and accept a raw CSS selector from Firefox Inspect.
-- **📋 Copy / ⬇ feedback.md** — export a markdown brief in a fixed format: a
-  `## Steps to reproduce` walkthrough and its review, then the remarks
-  (`[OPEN]` vs `RESOLVED`), then the `## Remove these elements` hit-list.
-  **💾 Save / 📂 Load** round-trip the whole record (remarks, steps, review,
-  basket) as JSON — Save downloads the file, Load opens a paste box, so a
-  review can travel through chat or email and be pasted straight back with no
-  file picker. Loading over existing content says so in the box before you
-  confirm. Copy confirms
-  on the button itself (`✓ Copied`) rather than in a dialog.
+- **📋 Copy / ⬇ Save / 📂 Load** — Copy puts the markdown brief on the
+  clipboard. **Save** swaps in place for a choice: **📝 md** (the brief) or
+  **🧾 json** (the full record — remarks, steps, review, basket). **Load**
+  opens a paste box, so a review can travel through chat or email and be
+  pasted straight back with no file picker; loading over existing content says
+  so in the box before you confirm. Outcomes confirm on the button itself
+  rather than in a dialog.
 - **Toolbar button** drops the on-page **📝 Feedback *n* pill** (and shows an
   open-remark badge count); the drawer opens only from that pill, and the toolbar
   button puts the pill — and everything with it — away again.

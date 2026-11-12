@@ -296,6 +296,12 @@ body.ffab-stepping #ffab-highlight {
   flex-wrap: wrap;
 }
 #ffab-dr-clear.ffab-hidden { display: none; }
+/* The format chooser Save swaps in for: markdown brief or the loadable JSON
+   record. Two mini buttons, the same slot as Save, so the row never moves. */
+#ffab-dr-fmt { display: inline-flex; gap: 4px; padding: 7px 0; white-space: nowrap; }
+#ffab-dr-fmt.ffab-hidden { display: none; }
+#ffab-dr-fmt .ffab-fmt { padding: 3px 8px; font-size: 11.5px; line-height: 1; background: #eef0fe; color: #4f46e5; border: 1px solid #dfe3fb; }
+#ffab-dr-fmt .ffab-fmt:hover { background: #e0e4fa; }
 /* The paste box Load opens: a reviewer can send the JSON through chat or
    email, and loading it needs no file picker — just Ctrl-V. */
 #ffab-dr-loadbox { padding: 8px 16px 10px; border-bottom: 1px solid #e3e6ec; }
