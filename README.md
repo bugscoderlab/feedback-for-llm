@@ -106,6 +106,10 @@ into the release workflow.
 
 ## Release
 
+Versions follow semver in spirit: **patch** for fixes and small tweaks, **minor**
+for a genuinely new capability — a quick iteration on a recent feature is a patch,
+not a new minor. Then:
+
 1. Bump `version` in [`src/manifest.json`](src/manifest.json).
 2. Commit and push to `main`.
 3. Tag the version and push — the tag must equal the manifest version:
