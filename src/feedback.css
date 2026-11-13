@@ -233,15 +233,16 @@ body.ffab-stepping #ffab-highlight {
 
 #ffab-drawer {
   position: fixed;
-  right: 22px;
-  bottom: 76px;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: 380px;
-  max-height: min(70vh, 640px);
   background: #ffffff;
-  border: 1px solid #e3e6ec;
-  border-radius: 14px;
+  border-left: 1px solid #e3e6ec;
   z-index: 2147483647;
-  box-shadow: 0 16px 50px rgba(20, 24, 45, 0.25);
+  /* Separates the docked panel from the page; a floating all-around shadow
+     would read as a card, this reads as an edge. */
+  box-shadow: -10px 0 30px rgba(20, 24, 45, 0.18);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -249,8 +250,20 @@ body.ffab-stepping #ffab-highlight {
   color: #1a2233;
   font-size: 14px;
   box-sizing: border-box;
+  transform: translateX(0);
+  transition: transform 0.28s ease;
 }
-#ffab-drawer.ffab-hidden { display: none; }
+/* Slides in from the right edge instead of popping: hidden means translated
+   fully off-screen (visibility follows the transform so the panel is gone
+   only after the slide finishes). check-hidden.mjs treats visibility:hidden
+   as a hide rule, and no JS changes are needed — show/hide only toggle the
+   ffab-hidden class. pointer-events guards the invisible off-screen phase. */
+#ffab-drawer.ffab-hidden {
+  visibility: hidden;
+  transform: translateX(100%);
+  transition: transform 0.28s ease, visibility 0s linear 0.28s;
+  pointer-events: none;
+}
 #ffab-drawer .ffab-dr-head {
   padding: 13px 16px;
   border-bottom: 1px solid #e3e6ec;
