@@ -29,9 +29,58 @@
     // its extension APIs are already gone — nothing to remove
   }
 
+  /* ---------------- React fiber probe ---------------- */
+
+  // React pins a fiber on every DOM node it renders (__reactFiber$…, the same
+  // internals React DevTools reads) — but that fiber is a JS property the PAGE
+  // set on its own DOM wrapper. Firefox content scripts see the DOM through
+  // Xray vision, which hides page-set expandos from Object.keys, so the walk
+  // must execute in the page's own world. This script defines
+  // window.__ffabReactInfo there; reactInfo calls it through
+  // window.wrappedJSObject and gets JSON back across the boundary.
+  // A strict page CSP can block the inline script: detection then stays off,
+  // exactly as on a non-React page. ES5 throughout — the page world is hostile.
+  const REACT_PROBE_SRC =
+    "window.__ffabReactInfo = function (el) {" +
+    "  try {" +
+    '    var key = Object.keys(el).find(function (k) { return k.indexOf("__reactFiber$") === 0; });' +
+    "    if (!key) return null;" +
+    "    var source = null, names = [], fiber = el[key];" +
+    "    for (var depth = 0; fiber && depth < 12; fiber = fiber.return, depth++) {" +
+    "      var src = fiber.memoizedProps && fiber.memoizedProps.__source;" +
+    '      if (!source && src && src.fileName) source = src.fileName + (src.lineNumber ? ":" + src.lineNumber : "");' +
+    "      var t = fiber.type;" +
+    '      var wrapped = t && typeof t === "object" ? t.type : null;' +
+    '      var fn = typeof t === "function" ? t : typeof wrapped === "function" ? wrapped : null;' +
+    "      var name = fn && (fn.displayName || fn.name);" +
+    "      if (name && /^[A-Z]/.test(name) && names[names.length - 1] !== name) names.push(name);" +
+    "    }" +
+    "    if (!names.length && !source) return null;" +
+    '    return JSON.stringify({ component: names.join(" > ") || null, source: source });' +
+    "  } catch (e) { return null; }" +
+    "};";
+
+  let reactProbeInstalled = false;
+
+  function ensureReactProbe() {
+    if (reactProbeInstalled) return;
+    reactProbeInstalled = true;
+    try {
+      const s = document.createElement("script");
+      s.textContent = REACT_PROBE_SRC;
+      (document.documentElement || document.head || document.body).appendChild(s);
+      s.remove(); // classic inline scripts execute synchronously on append
+    } catch {
+      /* page CSP blocked the inline script — component detection stays off */
+    }
+  }
+
   // In a subframe there is no pill or drawer to drive — the UI lives in the
   // top frame. The subframe instance is a thin relay: highlight locally,
   // swallow the press while armed, and forward the pick upward.
+  // The React probe goes in here too: relayed picks describe their element
+  // with describeElement, which needs the page-world fiber walk.
+  ensureReactProbe();
   if (window.top !== window.self) {
     relayPicks();
     return;
@@ -532,13 +581,14 @@
     return parts.join(" > ");
   }
 
-  /* React/Next.js detection. React pins a fiber to every DOM node it renders
-     (__reactFiber$… — the same internals React DevTools reads) and dev builds
-     stamp a __source {fileName, lineNumber} prop onto elements. Production
-     minifies component names into lowercase one-letters, so a chain of those
-     is treated as "unknown" rather than reported as garbage. Production apps
-     that opt in via a Babel plugin (data-component, data-inspector-*) are
-     read too. Best-effort throughout: never break a pick on React internals. */
+  /* React/Next.js detection. Component names come from the fiber walk in the
+     page world (see REACT_PROBE_SRC above — Xray vision hides the fiber from
+     this world); dev builds carry the source file, production minifies names
+     into lowercase one-letters which the walk treats as "unknown" rather than
+     reporting garbage. Production apps opting in via a Babel plugin
+     (data-component, data-inspector-*) are read here too — real DOM
+     attributes, visible across worlds. Best-effort throughout: never break a
+     pick on React internals. */
   function reactInfo(el) {
     try {
       let component = null;
@@ -553,24 +603,18 @@
         if (p) source = p + (ins.getAttribute("data-inspector-line") ? ":" + ins.getAttribute("data-inspector-line") : "");
       }
 
-      const key = Object.keys(el).find((k) => k.startsWith("__reactFiber$"));
-      if (key) {
-        const names = [];
-        let fiber = el[key];
-        for (let depth = 0; fiber && depth < 12; fiber = fiber.return, depth++) {
-          const src = fiber.memoizedProps && fiber.memoizedProps.__source;
-          if (!source && src && src.fileName) {
-            source = src.fileName + (src.lineNumber ? ":" + src.lineNumber : "");
-          }
-          const t = fiber.type;
-          const wrapped = t && typeof t === "object" ? t.type : null; // memo/forwardRef unwrap
-          const fn = typeof t === "function" ? t : typeof wrapped === "function" ? wrapped : null;
-          const name = fn && (fn.displayName || fn.name);
-          // Real components are Capitalized by convention; minified names are
-          // not, which is what keeps production garbage out of the report.
-          if (name && /^[A-Z]/.test(name) && names[names.length - 1] !== name) names.push(name);
+      // The fiber walk itself runs in the page world. wrappedJSObject is the
+      // Firefox Xray handle to the page's own window (undefined in the harness,
+      // where content.js already runs as a plain page script — same world).
+      ensureReactProbe();
+      const pageWindow = window.wrappedJSObject || window;
+      if (typeof pageWindow.__ffabReactInfo === "function") {
+        const raw = pageWindow.__ffabReactInfo(el.wrappedJSObject || el);
+        if (raw) {
+          const found = JSON.parse(raw);
+          if (!component && found.component) component = found.component;
+          if (!source && found.source) source = found.source;
         }
-        if (names.length && !component) component = names.join(" > ");
       }
 
       if (!component && !source) return null;
