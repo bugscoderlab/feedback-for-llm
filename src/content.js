@@ -524,6 +524,63 @@
     return parts.join(" > ");
   }
 
+  /* React/Next.js detection. React pins a fiber to every DOM node it renders
+     (__reactFiber$… — the same internals React DevTools reads) and dev builds
+     stamp a __source {fileName, lineNumber} prop onto elements. Production
+     minifies component names into lowercase one-letters, so a chain of those
+     is treated as "unknown" rather than reported as garbage. Production apps
+     that opt in via a Babel plugin (data-component, data-inspector-*) are
+     read too. Best-effort throughout: never break a pick on React internals. */
+  function reactInfo(el) {
+    try {
+      let component = null;
+      let source = null;
+
+      // Opt-in production instrumentation, readable in any build:
+      // babel-plugin-react-component-data-attribute, react-dev-inspector.
+      const ins = el.closest("[data-component], [data-inspector-path]");
+      if (ins) {
+        component = ins.getAttribute("data-component");
+        const p = ins.getAttribute("data-inspector-path");
+        if (p) source = p + (ins.getAttribute("data-inspector-line") ? ":" + ins.getAttribute("data-inspector-line") : "");
+      }
+
+      const key = Object.keys(el).find((k) => k.startsWith("__reactFiber$"));
+      if (key) {
+        const names = [];
+        let fiber = el[key];
+        for (let depth = 0; fiber && depth < 12; fiber = fiber.return, depth++) {
+          const src = fiber.memoizedProps && fiber.memoizedProps.__source;
+          if (!source && src && src.fileName) {
+            source = src.fileName + (src.lineNumber ? ":" + src.lineNumber : "");
+          }
+          const t = fiber.type;
+          const wrapped = t && typeof t === "object" ? t.type : null; // memo/forwardRef unwrap
+          const fn = typeof t === "function" ? t : typeof wrapped === "function" ? wrapped : null;
+          const name = fn && (fn.displayName || fn.name);
+          // Real components are Capitalized by convention; minified names are
+          // not, which is what keeps production garbage out of the report.
+          if (name && /^[A-Z]/.test(name) && names[names.length - 1] !== name) names.push(name);
+        }
+        if (names.length && !component) component = names.join(" > ");
+      }
+
+      if (!component && !source) return null;
+      return { ...(component ? { component } : {}), ...(source ? { source } : {}) };
+    } catch {
+      return null;
+    }
+  }
+
+  /* "⚛ A > B · 📄 file:line" for the popover and the drawer list; "" when the
+     page is not React or names are unknowable — the UI then shows nothing. */
+  function compLine(t) {
+    const parts = [];
+    if (t.component) parts.push("⚛ " + t.component);
+    if (t.source) parts.push("📄 " + t.source);
+    return parts.join(" · ");
+  }
+
   function describeElement(el) {
     const docCtx = `${document.title || "(untitled)"} · ${location.host}${location.pathname}`;
     let label = el.tagName.toLowerCase();
@@ -574,7 +631,7 @@
         content = text.slice(0, 120);
       }
     }
-    return { docCtx, label, content: (content || "").slice(0, 140) };
+    return { docCtx, label, content: (content || "").slice(0, 140), ...reactInfo(el) };
   }
 
   /* ---------------- popover ---------------- */
@@ -591,8 +648,10 @@
   function openPopover(x, y) {
     editingNum = null;
     $("ffab-ap-save").textContent = "💾 Save remark";
+    const cl = compLine(pendingTarget);
     $("ffab-ap-ctx").innerHTML =
       `<b>${escapeHtml(pendingTarget.label)}</b><br>${escapeHtml(pendingTarget.docCtx)}` +
+      (cl ? `<br>${escapeHtml(cl)}` : "") +
       (pendingTarget.content
         ? `<br>shows: “${escapeHtml(pendingTarget.content.slice(0, 60))}”`
         : "");
@@ -608,8 +667,10 @@
   function openEditPopover(a, x, y) {
     editingNum = a.num;
     $("ffab-ap-save").textContent = "💾 Save changes";
+    const cl = compLine(a);
     $("ffab-ap-ctx").innerHTML =
-      `<b>${escapeHtml(a.label)}</b><br>${escapeHtml(a.docCtx)}`;
+      `<b>${escapeHtml(a.label)}</b><br>${escapeHtml(a.docCtx)}` +
+      (cl ? `<br>${escapeHtml(cl)}` : "");
     $("ffab-ap-sel").textContent = a.selector;
     $("ffab-ap-note").value = a.note;
     show($("ffab-pop"));
@@ -765,8 +826,9 @@
     const list = $("ffab-dr-list");
     list.innerHTML = annotations.length
       ? annotations
-          .map(
-            (a, i) => `
+          .map((a, i) => {
+            const cl = compLine(a);
+            return `
       <div class="ffab-ann ${a.status === "resolved" ? "ffab-resolved" : ""}">
         <div class="ffab-ann-top">
           <span class="ffab-n">${a.num}</span>
@@ -774,6 +836,7 @@
           <span class="ffab-badge ${a.status === "resolved" ? "ffab-b-ok" : "ffab-b-review"}">${a.status}</span>
         </div>
         <div class="ffab-ann-sel">${escapeHtml(a.selector)}</div>
+        ${cl ? `<div class="ffab-ann-quote">${escapeHtml(cl)}</div>` : ""}
         <div class="ffab-ann-quote">${escapeHtml(a.docCtx)}${a.content ? ` · shows “${escapeHtml(a.content.slice(0, 60))}”` : ""}</div>
         <div class="ffab-ann-note">${escapeHtml(a.note)}</div>
         <div class="ffab-ann-tools">
@@ -781,8 +844,8 @@
           <button data-act="resolve" data-i="${i}">${a.status === "resolved" ? "↩ reopen" : "✓ resolve"}</button>
           <button data-act="del" data-i="${i}">🗑 delete</button>
         </div>
-      </div>`
-          )
+      </div>`;
+          })
           .join("")
       : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To explain the run that got you here, use <b>🧭 Record steps</b> — click element after element, then Esc and write your review.<br><br>To delete elements instead, use <b>🚫 Remove element</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
 
@@ -1020,7 +1083,8 @@
     // journey before the individual requests.
     if (steps.length) {
       L.push(`## Steps to reproduce`, "");
-      steps.forEach((s, i) => L.push(`${i + 1}. ${s.label} — \`${s.selector}\``));
+      steps.forEach((s, i) =>
+        L.push(`${i + 1}. ${s.label} — \`${s.selector}\`${s.component ? ` — ⚛ \`${s.component}\`${s.source ? ` (${s.source})` : ""}` : ""}`));
       L.push("");
       if (review.trim()) L.push("Review:", review.trim(), "");
     }
@@ -1029,6 +1093,8 @@
       L.push(`## ${a.num}. [${a.status.toUpperCase()}] ${a.label}`);
       L.push(`- Where: ${a.docCtx}`);
       L.push(`- Selector: \`${a.selector}\``);
+      if (a.component) L.push(`- Component: \`${a.component}\`${a.source ? ` — ${a.source}` : ""}`);
+      else if (a.source) L.push(`- Source: \`${a.source}\``);
       if (a.content) L.push(`- Currently shows: "${a.content}"`);
       L.push("", "Requested change:", a.note, "");
     });

@@ -278,6 +278,47 @@ const HARNESS_JS = `
     click($("ffab-fab")); // put the drawer back as it was
     await sleep(30);
 
+    // 7h. React/Next.js: the fiber React pins on every rendered node names the
+    // component (dev builds also carry the source file). Fixture fibers stand
+    // in for React — same __reactFiber$ shape, set in the page above.
+    click($("ffab-dr-pick"));
+    click($("react-btn"));
+    await sleep(30);
+    check("popover names the React component and source file",
+      $("ffab-ap-ctx").textContent.indexOf("⚛ PricingCard") !== -1 &&
+        $("ffab-ap-ctx").textContent.indexOf("📄 src/components/PricingCard.tsx:42") !== -1,
+      $("ffab-ap-ctx").textContent);
+    $("ffab-ap-note").value = "make the react button stand out";
+    click($("ffab-ap-save"));
+    await sleep(30);
+    check("the remark records component and source file",
+      rec().annotations.length === 2 && rec().annotations[1].component === "PricingCard" &&
+        rec().annotations[1].source === "src/components/PricingCard.tsx:42",
+      JSON.stringify(rec().annotations[1]));
+
+    // production minification mangles names to one-letters — those are
+    // garbage and must be reported as nothing, not shown.
+    click($("ffab-dr-pick"));
+    click($("min-btn"));
+    await sleep(30);
+    check("minified production names are not reported",
+      $("ffab-ap-ctx").textContent.indexOf("⚛") === -1,
+      $("ffab-ap-ctx").textContent);
+    click($("ffab-ap-cancel"));
+    await sleep(30);
+
+    // production opt-in: babel-plugin-react-component-data-attribute et al.
+    click($("ffab-dr-pick"));
+    click($("data-btn"));
+    await sleep(30);
+    check("a data-component attribute is honoured",
+      $("ffab-ap-ctx").textContent.indexOf("⚛ src/components/DataBtn.tsx") !== -1,
+      $("ffab-ap-ctx").textContent);
+    click($("ffab-ap-cancel"));
+    await sleep(30);
+    click($("ffab-fab")); // put the drawer back as it was
+    await sleep(30);
+
     // 8. the brief
     click($("ffab-dr-copy"));
     await sleep(60);
@@ -299,6 +340,9 @@ const HARNESS_JS = `
     check("steps come before the review", md.indexOf("## Steps to reproduce") < md.indexOf("Review:"));
     check("review follows the steps", md.indexOf("Review:") < md.indexOf(REVIEW) && md.indexOf(REVIEW) !== -1);
     check("remarks still follow the review", md.indexOf(REVIEW) < md.indexOf("## 1. [OPEN] button"));
+    check("the brief names the component and source file",
+      md.indexOf("Component: \\\`PricingCard\\\`") !== -1 &&
+        md.indexOf("src/components/PricingCard.tsx:42") !== -1);
 
     // 9. re-injecting after an extension update: the old instance's listener is
     //    dead (it belonged to the previous version), and the script must retire
@@ -492,6 +536,34 @@ function harnessHtml() {
     </div>
     <iframe id="demo-frame" srcdoc="<button id='in-frame-btn'>Inside frame</button>"></iframe>
   </div>
+  <div class="card">
+    <button id="react-btn">React button</button>
+    <button id="min-btn">Minified button</button>
+    <button id="data-btn" data-component="src/components/DataBtn.tsx">Data button</button>
+  </div>
+  <script>
+    // Stand in for React: pin fibers on the buttons exactly the way React
+    // does (__reactFiber$<random>), so describeElement's fiber walk reads
+    // something real. react-btn is a dev build (real name + __source);
+    // min-btn is a production build (names minified to one-letters).
+    (function () {
+      function PricingCard() {}
+      function t() {}
+      function e() {}
+      var rb = document.getElementById("react-btn");
+      var host = { type: "button", memoizedProps: {}, return: null };
+      host.return = {
+        type: PricingCard,
+        memoizedProps: { __source: { fileName: "src/components/PricingCard.tsx", lineNumber: 42 } },
+        return: null,
+      };
+      rb["__reactFiber$test"] = host;
+      var mb = document.getElementById("min-btn");
+      var mhost = { type: "button", memoizedProps: {}, return: null };
+      mhost.return = { type: t, memoizedProps: {}, return: { type: e, memoizedProps: {}, return: null } };
+      mb["__reactFiber$test"] = mhost;
+    })();
+  </script>
 <script>
 ${HARNESS_JS}
 </script>

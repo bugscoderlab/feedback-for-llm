@@ -14,6 +14,12 @@ GitHub Releases.
   exact layer you mean is reachable without hovering bare padding; **Esc**
   cancels. Works inside **iframes** too (same- or cross-origin): a thin relay
   in each subframe mirrors the crosshair and forwards the pick to the popover.
+  On **React / Next.js** pages the popover also names the component chain
+  (⚛ `InvoiceCard > Row`) and, in dev builds, the source file (📄
+  `components/InvoiceCard.tsx:42`) — read off the fiber React pins on each
+  node, the same internals React DevTools uses. Production builds minify
+  names away; apps that opt in with a `data-component` /
+  `data-inspector-*` Babel plugin are read too.
 - **🚫 Remove element** — the same picker aimed at deletion: picks skip the popover
   and drop straight into a removal basket (red ✕ markers), one after another, until
   you press Esc.
