@@ -206,7 +206,7 @@
     </div>
     <div id="ffab-drawer" class="ffab-hidden">
       <div class="ffab-dr-head">
-        <h3>📝 Feedback for LLM</h3>
+        <h3>📝 Feedback for LLM <small class="ffab-ver" id="ffab-version"></small></h3>
         <span class="ffab-x" id="ffab-dr-close">✕</span>
       </div>
       <div class="ffab-dr-pickers">
@@ -258,6 +258,14 @@
   const $ = (id) => document.getElementById(id);
   const show = (el) => el.classList.remove("ffab-hidden");
   const hide = (el) => el.classList.add("ffab-hidden");
+
+  // The version chip sits in the drawer header so a reviewer can say (and
+  // check) which build they are looking at without opening about:addons.
+  try {
+    $("ffab-version").textContent = "v" + browser.runtime.getManifest().version;
+  } catch {
+    /* manifest unreachable — the chip stays empty, nothing else depends on it */
+  }
 
   /* ---------------- picking ---------------- */
 

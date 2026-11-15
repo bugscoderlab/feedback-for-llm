@@ -276,6 +276,19 @@ body.ffab-stepping #ffab-highlight {
   margin: 0;
   flex: 1;
 }
+/* The build version, from the manifest — a reviewer reporting a bug can read
+   which release they saw the bug in straight off the panel. */
+#ffab-drawer .ffab-ver {
+  font-size: 10px;
+  font-weight: 600;
+  color: #98a1b3;
+  background: #f0f1f5;
+  border-radius: 999px;
+  padding: 2px 7px;
+  margin-left: 6px;
+  vertical-align: 2px;
+  letter-spacing: 0.02em;
+}
 #ffab-drawer .ffab-x {
   cursor: pointer;
   color: #98a1b3;

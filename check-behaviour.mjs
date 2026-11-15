@@ -122,6 +122,8 @@ const HARNESS_JS = `
     // 2. the pill opens the drawer
     click($("ffab-fab"));
     check("pill opens the drawer", !$("ffab-drawer").classList.contains("ffab-hidden"));
+    check("the header carries the build version",
+      $("ffab-version").textContent === "v0.0.0", $("ffab-version").textContent);
 
     // 3. arming the walkthrough takes over the page like the other pickers
     click($("ffab-dr-step"));
