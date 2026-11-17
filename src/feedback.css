@@ -141,6 +141,91 @@ body.ffab-stepping #ffab-highlight {
   color: #c02b2b;
 }
 
+/* ---------- picked-so-far list (multi run) ---------- */
+
+/* Top-right, opposite the pill: while "Pick several" is armed this panel is
+   the only place the collected elements are visible, since the drawer is
+   hidden for picking. */
+#ffab-run {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  width: 300px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e3e6ec;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(20, 24, 45, 0.22);
+  z-index: 2147483646;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+#ffab-run.ffab-hidden { display: none; }
+#ffab-run .ffab-run-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: #1a2233;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eef0f4;
+  margin-bottom: 6px;
+}
+#ffab-run .ffab-run-hint { font-weight: 500; color: #9aa3b5; font-size: 11.5px; }
+#ffab-run .ffab-run-empty { font-size: 12px; color: #9aa3b5; padding: 4px 2px; }
+#ffab-run .ffab-run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  border-bottom: 1px solid #f2f3f7;
+}
+#ffab-run .ffab-run-row:last-child { border-bottom: none; }
+#ffab-run .ffab-run-n {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #4f46e5;
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+#ffab-run .ffab-run-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#ffab-run .ffab-run-label {
+  font-size: 12px;
+  color: #1a2233;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#ffab-run .ffab-run-sel {
+  font-size: 10.5px;
+  color: #9aa3b5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#ffab-run .ffab-run-x {
+  flex: none;
+  border: none;
+  background: none;
+  color: #9aa3b5;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  line-height: 1;
+}
+#ffab-run .ffab-run-x:hover { background: #f0f1f5; color: #c02b2b; }
+
 /* ---------- markers ---------- */
 
 #ffab-markers {

@@ -252,9 +252,23 @@ const HARNESS_JS = `
     await sleep(30);
     check("the pill counts the collected run",
       $("ffab-cnt").textContent === "2", $("ffab-fab-label").textContent + " " + $("ffab-cnt").textContent);
+    check("the picked-so-far list shows both elements",
+      $("ffab-run").querySelectorAll(".ffab-run-row").length === 2
+        && $("ffab-run").textContent.indexOf("#add-user") !== -1
+        && $("ffab-run").textContent.indexOf("#email") !== -1);
+    click($("ffab-run").querySelector(".ffab-run-x")); // drop the add-user mispick
+    await sleep(30);
+    check("dropping a pick updates the run",
+      $("ffab-cnt").textContent === "1" && $("ffab-run").querySelectorAll(".ffab-run-row").length === 1,
+      $("ffab-cnt").textContent);
+    au.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: aur.x + 2, clientY: aur.y + 2 }));
+    click(au); // re-pick it — the run is two again
+    await sleep(30);
+    check("the re-pick lands again", $("ffab-cnt").textContent === "2", $("ffab-cnt").textContent);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await sleep(30);
     check("Esc opens the popover for the run", !$("ffab-pop").classList.contains("ffab-hidden"));
+    check("the run list steps aside for the popover", $("ffab-run").classList.contains("ffab-hidden"));
     check("the popover says how many elements were picked",
       $("ffab-ap-ctx").textContent.indexOf("2 elements picked") !== -1, $("ffab-ap-ctx").textContent);
     check("the popover lists every collected selector",
@@ -269,7 +283,8 @@ const HARNESS_JS = `
       rec().annotations[1].note === "give these the same treatment"
         && rec().annotations[2].note === "give these the same treatment");
     check("each remark keeps its own selector",
-      rec().annotations[1].selector === "#add-user" && rec().annotations[2].selector === "#email");
+      rec().annotations[1].selector === "#email" && rec().annotations[2].selector === "#add-user",
+      rec().annotations[1].selector + " / " + rec().annotations[2].selector);
     check("each remark pins its own marker",
       document.querySelectorAll("#ffab-markers .ffab-marker").length === 3);
     click($("ffab-fab")); // put the drawer back as it was

@@ -224,6 +224,7 @@
     "ffab-drawer",
     "ffab-fab",
     "ffab-markers",
+    "ffab-run",
     "ffab-marker",
     "ffab-dr-steps",
     "ffab-dr-review",
@@ -303,7 +304,8 @@
       </div>
     </div>
     <button id="ffab-fab" class="ffab-hidden" title="Feedback for LLM"><span id="ffab-fab-label">📝 Feedback</span> <span class="ffab-cnt" id="ffab-cnt">0</span></button>
-    <div id="ffab-markers"></div>`;
+    <div id="ffab-markers"></div>
+    <div id="ffab-run" class="ffab-hidden"></div>`;
   // the page's own styles can be hostile — move UI to the top layer one node at a time
   while (root.firstElementChild) document.documentElement.appendChild(root.firstElementChild);
 
@@ -602,6 +604,42 @@
       pendingTargets.push({ ...target });
       render(); // the pill is the run's live counter, as in step mode
     }
+  }
+
+  /* The multi-run's picked-so-far list: while "Pick several" is armed this is
+     the only place the collected elements are visible (the drawer is hidden),
+     so the reviewer can check what they picked and drop a mispick. */
+  function renderRun() {
+    const box = $("ffab-run");
+    const on = pickMode === "multi";
+    box.classList.toggle("ffab-hidden", !on);
+    if (!on) return;
+    box.innerHTML =
+      `<div class="ffab-run-head">
+         <span>🎯 ${pendingTargets.length} picked</span>
+         <span class="ffab-run-hint">Esc to write the note</span>
+       </div>` +
+      (pendingTargets.length
+        ? pendingTargets
+            .map(
+              (t, i) => `
+      <div class="ffab-run-row">
+        <span class="ffab-run-n">${i + 1}</span>
+        <div class="ffab-run-main">
+          <span class="ffab-run-label">${escapeHtml(t.label)}</span>
+          <span class="ffab-run-sel">${escapeHtml(t.selector)}</span>
+        </div>
+        <button class="ffab-run-x" data-i="${i}" title="Drop this pick">✕</button>
+      </div>`
+            )
+            .join("")
+        : `<div class="ffab-run-empty">Click elements to add them…</div>`);
+    box.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => {
+        pendingTargets.splice(+b.dataset.i, 1);
+        render();
+      })
+    );
   }
 
   /* ---------------- selector & description ---------------- */
@@ -1005,6 +1043,7 @@
 
     renderSteps();
     renderBasket();
+    renderRun();
 
     renderMarkers();
   }
