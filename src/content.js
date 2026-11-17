@@ -326,6 +326,8 @@
   let pickMode = null; // null | "remark" | "multi" | "remove" | "step"
   let pendingTarget = null; // {selector, label, content, docCtx} while the popover is open
   let pendingTargets = []; // the run of elements collected in "multi" mode, all sharing one note
+  let runExpanded = false; // picked-so-far list: compact chip vs full list
+  let lastRunCount = 0; // for the chip's pulse when a pick lands
 
   /** Publish the armed state so subframe relays can mirror the crosshair. */
   function broadcastPickState() {
@@ -343,7 +345,11 @@
     document.body.classList.add("ffab-annotating");
     if (mode === "remove") document.body.classList.add("ffab-removing");
     if (mode === "step") document.body.classList.add("ffab-stepping");
-    if (mode === "multi") pendingTargets = []; // a fresh run collects from empty
+    if (mode === "multi") {
+      pendingTargets = []; // a fresh run collects from empty…
+      runExpanded = false; // …and starts as the compact chip, so the panel
+      lastRunCount = 0; //    never opens on top of page content the reviewer may still want to pick
+    }
     // Picking replaces the panel with a crosshair, but the FAB stays as the
     // only visible status indicator (it pulses in ffab-picking, and counts the
     // run in step mode) and the way out.
@@ -607,16 +613,39 @@
   }
 
   /* The multi-run's picked-so-far list: while "Pick several" is armed this is
-     the only place the collected elements are visible (the drawer is hidden),
-     so the reviewer can check what they picked and drop a mispick. */
+     the only place the collected elements are visible (the drawer is hidden).
+     Collapsed to a chip by default — a full list pinned top-right sits on top
+     of page content (e.g. the right-hand columns of a report table) and its
+     clicks swallow picks aimed at what it covers. The chip is the live count;
+     click it for the full list, ✕ a mispick out, click the header to fold it
+     back. */
   function renderRun() {
     const box = $("ffab-run");
     const on = pickMode === "multi";
     box.classList.toggle("ffab-hidden", !on);
     if (!on) return;
+    // The pulse fires only when the count grew, not on every render; tracked
+    // here so expand/collapse can't leave it stale either way.
+    const grew = pendingTargets.length > lastRunCount;
+    lastRunCount = pendingTargets.length;
+    if (!runExpanded) {
+      // The node is rebuilt on every render; the pop class rides along only
+      // when a pick just landed.
+      box.innerHTML =
+        `<button class="ffab-run-chip${grew ? " ffab-run-pop" : ""}" id="ffab-run-chip" title="Show the picked elements">
+           🎯 <b>${pendingTargets.length}</b> picked
+           <span class="ffab-run-hint">Esc for note</span>
+           <span class="ffab-run-caret">▾</span>
+         </button>`;
+      $("ffab-run-chip").addEventListener("click", () => {
+        runExpanded = true;
+        render();
+      });
+      return;
+    }
     box.innerHTML =
       `<div class="ffab-run-head">
-         <span>🎯 ${pendingTargets.length} picked</span>
+         <button class="ffab-run-collapse" id="ffab-run-collapse" title="Fold back to the chip">🎯 ${pendingTargets.length} picked ▴</button>
          <span class="ffab-run-hint">Esc to write the note</span>
        </div>` +
       (pendingTargets.length
@@ -634,7 +663,11 @@
             )
             .join("")
         : `<div class="ffab-run-empty">Click elements to add them…</div>`);
-    box.querySelectorAll("button").forEach((b) =>
+    $("ffab-run-collapse").addEventListener("click", () => {
+      runExpanded = false;
+      render();
+    });
+    box.querySelectorAll(".ffab-run-x").forEach((b) =>
       b.addEventListener("click", () => {
         pendingTargets.splice(+b.dataset.i, 1);
         render();

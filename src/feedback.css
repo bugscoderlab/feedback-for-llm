@@ -143,48 +143,87 @@ body.ffab-stepping #ffab-highlight {
 
 /* ---------- picked-so-far list (multi run) ---------- */
 
-/* Top-right, opposite the pill: while "Pick several" is armed this panel is
-   the only place the collected elements are visible, since the drawer is
-   hidden for picking. */
+/* Collapsed, this is a small dark chip the size of the pill — a full list
+   pinned top-right would sit on top of page content (the right-hand columns
+   of a report table, say) and swallow picks aimed at what it covers. Click
+   the chip for the full list; click its header to fold it back. */
 #ffab-run {
   position: fixed;
   top: 14px;
   right: 14px;
-  width: 300px;
-  max-height: 60vh;
-  overflow-y: auto;
-  background: #ffffff;
-  border: 1px solid #e3e6ec;
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(20, 24, 45, 0.22);
   z-index: 2147483646;
-  padding: 10px 12px;
-  box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 #ffab-run.ffab-hidden { display: none; }
+#ffab-run .ffab-run-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: #1a2233;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 9px 15px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(20, 24, 45, 0.3);
+}
+#ffab-run .ffab-run-chip:hover { background: #000000; }
+#ffab-run .ffab-run-chip b { color: #a5b4fc; }
+#ffab-run .ffab-run-chip .ffab-run-hint { color: #9aa3b5; font-weight: 500; font-size: 11.5px; }
+#ffab-run .ffab-run-chip .ffab-run-caret { color: #9aa3b5; font-size: 11px; }
+#ffab-run .ffab-run-chip.ffab-run-pop { animation: ffab-run-pop 0.3s ease-out; }
+@keyframes ffab-run-pop {
+  from { transform: scale(1.12); }
+  to { transform: scale(1); }
+}
+
+/* Expanded: the full picked-so-far card. */
 #ffab-run .ffab-run-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e3e6ec;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid #eef0f4;
+  box-shadow: 0 12px 40px rgba(20, 24, 45, 0.22);
+  padding: 10px 12px 8px;
+}
+#ffab-run .ffab-run-collapse {
+  border: none;
+  background: none;
+  padding: 0;
   font-size: 12.5px;
   font-weight: 650;
   color: #1a2233;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #eef0f4;
-  margin-bottom: 6px;
+  cursor: pointer;
 }
-#ffab-run .ffab-run-hint { font-weight: 500; color: #9aa3b5; font-size: 11.5px; }
-#ffab-run .ffab-run-empty { font-size: 12px; color: #9aa3b5; padding: 4px 2px; }
+#ffab-run .ffab-run-collapse:hover { color: #4f46e5; }
+#ffab-run .ffab-run-head .ffab-run-hint { font-weight: 500; color: #9aa3b5; font-size: 11.5px; }
+#ffab-run .ffab-run-empty {
+  font-size: 12px;
+  color: #9aa3b5;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid #e3e6ec;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 12px 40px rgba(20, 24, 45, 0.22);
+}
 #ffab-run .ffab-run-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 2px;
+  padding: 5px 12px;
+  background: #ffffff;
+  border-left: 1px solid #e3e6ec;
+  border-right: 1px solid #e3e6ec;
   border-bottom: 1px solid #f2f3f7;
 }
-#ffab-run .ffab-run-row:last-child { border-bottom: none; }
+#ffab-run .ffab-run-row:last-of-type { border-radius: 0 0 12px 12px; box-shadow: 0 12px 40px rgba(20, 24, 45, 0.22); }
 #ffab-run .ffab-run-n {
   flex: none;
   min-width: 18px;

@@ -237,12 +237,21 @@ const HARNESS_JS = `
     click($("ffab-dr-multi"));
     check("multi mode arms from the drawer",
       $("ffab-dr-multi").classList.contains("ffab-on") && $("ffab-drawer").classList.contains("ffab-hidden"));
+    check("the run starts as the compact chip",
+      !!$("ffab-run-chip") && $("ffab-run").querySelectorAll(".ffab-run-row").length === 0);
     const au = $("add-user");
     const aur = au.getBoundingClientRect();
     au.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: aur.x + 2, clientY: aur.y + 2 }));
     click(au);
     await sleep(30);
     check("a multi pick keeps the picker armed", document.body.classList.contains("ffab-annotating"));
+    check("the chip counts the run",
+      $("ffab-run-chip").textContent.indexOf("1 picked") !== -1, $("ffab-run").textContent);
+    click($("ffab-run-chip")); // expand to the full list
+    await sleep(30);
+    check("expanding the chip lists the picks",
+      $("ffab-run").querySelectorAll(".ffab-run-row").length === 1
+        && $("ffab-run").textContent.indexOf("#add-user") !== -1);
     const em = $("email");
     const emr = em.getBoundingClientRect();
     em.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: emr.x + 2, clientY: emr.y + 2 }));
@@ -265,6 +274,10 @@ const HARNESS_JS = `
     click(au); // re-pick it — the run is two again
     await sleep(30);
     check("the re-pick lands again", $("ffab-cnt").textContent === "2", $("ffab-cnt").textContent);
+    click($("ffab-run-collapse")); // fold back to the chip
+    await sleep(30);
+    check("collapsing folds back to the chip",
+      !!$("ffab-run-chip") && $("ffab-run").querySelectorAll(".ffab-run-row").length === 0);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await sleep(30);
     check("Esc opens the popover for the run", !$("ffab-pop").classList.contains("ffab-hidden"));
