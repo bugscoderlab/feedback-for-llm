@@ -92,7 +92,7 @@
   // per-tab in the background: the top frame publishes it, subframes query it.
   // Picks are forwarded topward the same way — child → background → top frame.
   function relayPicks() {
-    let armed = null; // null | "remark" | "remove" | "step"
+    let armed = null; // null | "remark" | "multi" | "remove" | "step"
     let lastQuery = 0;
     const h = document.createElement("div");
     h.style.cssText =
@@ -262,6 +262,9 @@
         <button class="ffab-btn ffab-pick" id="ffab-dr-pick">🎯 Pick element</button>
         <button class="ffab-btn ffab-del" id="ffab-dr-del">🚫 Remove element</button>
       </div>
+      <div class="ffab-dr-multi">
+        <button class="ffab-btn ffab-pick" id="ffab-dr-multi" title="Pick several elements that share one note">🎯 Pick several</button>
+      </div>
       <div class="ffab-dr-walk">
         <button class="ffab-btn ffab-step" id="ffab-dr-step">🧭 Record steps</button>
       </div>
@@ -318,8 +321,9 @@
 
   /* ---------------- picking ---------------- */
 
-  let pickMode = null; // null | "remark" | "remove" | "step"
+  let pickMode = null; // null | "remark" | "multi" | "remove" | "step"
   let pendingTarget = null; // {selector, label, content, docCtx} while the popover is open
+  let pendingTargets = []; // the run of elements collected in "multi" mode, all sharing one note
 
   /** Publish the armed state so subframe relays can mirror the crosshair. */
   function broadcastPickState() {
@@ -337,6 +341,7 @@
     document.body.classList.add("ffab-annotating");
     if (mode === "remove") document.body.classList.add("ffab-removing");
     if (mode === "step") document.body.classList.add("ffab-stepping");
+    if (mode === "multi") pendingTargets = []; // a fresh run collects from empty
     // Picking replaces the panel with a crosshair, but the FAB stays as the
     // only visible status indicator (it pulses in ffab-picking, and counts the
     // run in step mode) and the way out.
@@ -361,16 +366,20 @@
     broadcastPickState();
   }
 
-  /** Reflect the armed pick mode on all three picker buttons (label + pressed style). */
+  /** Reflect the armed pick mode on all four picker buttons (label + pressed style). */
   function setPickButtons() {
     const pick = $("ffab-dr-pick");
+    const multi = $("ffab-dr-multi");
     const del = $("ffab-dr-del");
     const step = $("ffab-dr-step");
     pick.classList.toggle("ffab-on", pickMode === "remark");
+    multi.classList.toggle("ffab-on", pickMode === "multi");
     del.classList.toggle("ffab-on", pickMode === "remove");
     step.classList.toggle("ffab-on", pickMode === "step");
     pick.textContent =
       pickMode === "remark" ? "🎯 Click an element… (Tab/[ up · Esc)" : "🎯 Pick element";
+    multi.textContent =
+      pickMode === "multi" ? "🎯 Click elements… (Tab/[ up · Esc)" : "🎯 Pick several";
     del.textContent =
       pickMode === "remove"
         ? "🚫 Click elements to remove… (Tab/[ up · Esc)"
@@ -466,6 +475,14 @@
       addStep(el);
       return;
     }
+    if (pickMode === "multi") {
+      // Same one-motion run again, this time for remarks that apply to a whole
+      // group: each click collects the element, the picker stays armed, and
+      // Esc opens the popover to write the one note they all share.
+      addMultiTarget(el);
+      return;
+    }
+    pendingTargets = [];
     pendingTarget = { selector: buildSelector(el), ...describeElement(el) };
     stopPicking();
     openPopover(e.clientX, e.clientY);
@@ -499,6 +516,14 @@
       if (pickMode === "step") {
         stopPicking();
         setDrawerOpen(true);
+        return;
+      }
+      if (pickMode === "multi") {
+        // The collected picks get their one shared note now; with nothing
+        // collected there is nothing to write, so Esc just stands down.
+        stopPicking();
+        if (pendingTargets.length) openPopover(lastPointer.x, lastPointer.y);
+        else setDrawerOpen(true);
         return;
       }
       if (pickMode) stopPicking();
@@ -550,6 +575,33 @@
     steps.push({ ...target, at: new Date().toISOString() });
     await save();
     render();
+  }
+
+  /* ---------------- shared-note picks ("Pick several") ---------------- */
+
+  async function addMultiTarget(el) {
+    await addMultiEntry({ selector: buildSelector(el), ...describeElement(el) });
+    // No remark exists for these yet, so there is no marker to pop — the
+    // highlight flash (as on a step) plus the pill counter is the confirmation
+    // that a pick landed.
+    const h = $("ffab-highlight");
+    h.classList.remove("ffab-flash");
+    void h.offsetWidth; // restart the animation for a back-to-back pick
+    h.classList.add("ffab-flash");
+    setTimeout(() => h.classList.remove("ffab-flash"), 400);
+  }
+
+  // Descriptor form: picks relayed from a subframe arrive as data, not Elements.
+  // Collected picks are transient — they become real remarks only when the
+  // popover's note is saved — so there is nothing to persist here yet.
+  async function addMultiEntry(target) {
+    const already =
+      pendingTargets.some((t) => t.selector === target.selector) ||
+      annotations.some((a) => a.selector === target.selector);
+    if (!already) {
+      pendingTargets.push({ ...target });
+      render(); // the pill is the run's live counter, as in step mode
+    }
   }
 
   /* ---------------- selector & description ---------------- */
@@ -699,15 +751,32 @@
 
   function openPopover(x, y) {
     editingNum = null;
-    $("ffab-ap-save").textContent = "💾 Save remark";
-    const cl = compLine(pendingTarget);
-    $("ffab-ap-ctx").innerHTML =
-      `<b>${escapeHtml(pendingTarget.label)}</b><br>${escapeHtml(pendingTarget.docCtx)}` +
-      (cl ? `<br>${escapeHtml(cl)}` : "") +
-      (pendingTarget.content
-        ? `<br>shows: “${escapeHtml(pendingTarget.content.slice(0, 60))}”`
-        : "");
-    $("ffab-ap-sel").textContent = pendingTarget.selector;
+    const multi = pendingTargets.length > 0;
+    $("ffab-ap-save").textContent = multi
+      ? `💾 Save on ${pendingTargets.length} element${pendingTargets.length === 1 ? "" : "s"}`
+      : "💾 Save remark";
+    if (multi) {
+      // One run, one note: the context names the count and what was picked
+      // rather than a single element, and the selector line lists them all.
+      const names = pendingTargets
+        .slice(0, 3)
+        .map((t) => t.label)
+        .join(" · ");
+      $("ffab-ap-ctx").innerHTML =
+        `<b>${pendingTargets.length} elements picked</b> — the note goes on each, as its own numbered remark` +
+        (pendingTargets.length > 3 ? ` (+${pendingTargets.length - 3} more)` : "") +
+        `<br>${escapeHtml(names)}`;
+      $("ffab-ap-sel").textContent = pendingTargets.map((t) => t.selector).join("  ·  ");
+    } else {
+      const cl = compLine(pendingTarget);
+      $("ffab-ap-ctx").innerHTML =
+        `<b>${escapeHtml(pendingTarget.label)}</b><br>${escapeHtml(pendingTarget.docCtx)}` +
+        (cl ? `<br>${escapeHtml(cl)}` : "") +
+        (pendingTarget.content
+          ? `<br>shows: “${escapeHtml(pendingTarget.content.slice(0, 60))}”`
+          : "");
+      $("ffab-ap-sel").textContent = pendingTarget.selector;
+    }
     $("ffab-ap-note").value = "";
     show($("ffab-pop"));
     placePopover(x, y);
@@ -718,6 +787,7 @@
   // prefilled, Save writes back onto the annotation instead of adding one.
   function openEditPopover(a, x, y) {
     editingNum = a.num;
+    pendingTargets = []; // editing one remark must not fan out onto a stale run
     $("ffab-ap-save").textContent = "💾 Save changes";
     const cl = compLine(a);
     $("ffab-ap-ctx").innerHTML =
@@ -733,6 +803,7 @@
   function closePopover() {
     hide($("ffab-pop"));
     pendingTarget = null;
+    pendingTargets = [];
     editingNum = null;
   }
 
@@ -750,8 +821,14 @@
       closePopover();
       return;
     }
-    if (!pendingTarget) return;
-    annotations.push({ num: seq++, status: "open", note, ...pendingTarget, at: new Date().toISOString() });
+    if (!pendingTarget && !pendingTargets.length) return;
+    // A multi-run fans one note out into one numbered remark per picked
+    // element, so markers, per-remark editing, and the export all keep working
+    // exactly as for individually picked remarks.
+    const targets = pendingTargets.length ? pendingTargets : [pendingTarget];
+    for (const t of targets) {
+      annotations.push({ num: seq++, status: "open", note, ...t, at: new Date().toISOString() });
+    }
     await save();
     closePopover();
     render();
@@ -859,15 +936,25 @@
   function render() {
     const removing = pickMode === "remove";
     const stepping = pickMode === "step";
+    const multi = pickMode === "multi";
     const open = annotations.filter((a) => a.status === "open").length;
-    // While removal-/step-picking, the FAB becomes that run's live counter — the
-    // drawer is hidden at that point, so it is the only running feedback.
+    // While removal-/step-/multi-picking, the FAB becomes that run's live
+    // counter — the drawer is hidden at that point, so it is the only running
+    // feedback.
     $("ffab-fab-label").textContent = removing
       ? "🚫 Remove"
       : stepping
         ? "🧭 Steps"
-        : "📝 Feedback";
-    $("ffab-cnt").textContent = removing ? basket.length : stepping ? steps.length : open;
+        : multi
+          ? "🎯 Picking"
+          : "📝 Feedback";
+    $("ffab-cnt").textContent = removing
+      ? basket.length
+      : stepping
+        ? steps.length
+        : multi
+          ? pendingTargets.length
+          : open;
     syncClearAll();
     try {
       browser.runtime.sendMessage({ type: "ffab:badge", count: open });
@@ -899,7 +986,7 @@
       </div>`;
           })
           .join("")
-      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To explain the run that got you here, use <b>🧭 Record steps</b> — click element after element, then Esc and write your review.<br><br>To delete elements instead, use <b>🚫 Remove element</b> — picks drop straight into the removal basket.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
+      : `<div class="ffab-dr-empty">No remarks yet.<br>Click <b>🎯 Pick element</b>, then click anything — a field, a column, a button — and write what you want changed.<br><br>To explain the run that got you here, use <b>🧭 Record steps</b> — click element after element, then Esc and write your review.<br><br>To delete elements instead, use <b>🚫 Remove element</b> — picks drop straight into the removal basket.<br><br>To say the same thing about a whole group, use <b>🎯 Pick several</b> — click each element, press Esc, and write the note once; it lands on each as its own remark.<br><br>Or paste a CSS selector from Firefox Inspect below.</div>`;
 
     list.querySelectorAll("button").forEach((b) =>
       b.addEventListener("click", async () => {
@@ -1020,8 +1107,12 @@
   $("ffab-fab").addEventListener("click", () => {
     // While picking, a pill click means "cancel" rather than "toggle the drawer".
     if (pickMode) {
+      // …except a finished multi-run: those picks would be lost on the way to
+      // the drawer, so the pill click lands them in the popover instead, as Esc does.
+      const targets = pickMode === "multi" && pendingTargets.length;
       stopPicking();
-      setDrawerOpen(true);
+      if (targets) openPopover(lastPointer.x, lastPointer.y);
+      else setDrawerOpen(true);
       return;
     }
     setDrawerOpen(!isDrawerOpen());
@@ -1029,6 +1120,9 @@
   $("ffab-dr-close").addEventListener("click", () => setDrawerOpen(false));
   $("ffab-dr-pick").addEventListener("click", () =>
     pickMode === "remark" ? stopPicking() : startPicking("remark")
+  );
+  $("ffab-dr-multi").addEventListener("click", () =>
+    pickMode === "multi" ? stopPicking() : startPicking("multi")
   );
   $("ffab-dr-del").addEventListener("click", () =>
     pickMode === "remove" ? stopPicking() : startPicking("remove")
@@ -1062,6 +1156,7 @@
     pendingTarget = el
       ? { selector: sel, ...describeElement(el) }
       : { selector: sel, docCtx: "(selector from Inspector)", label: "element (not currently rendered)", content: "" };
+    pendingTargets = [];
     $("ffab-dr-sel-input").value = "";
     openPopover(innerWidth / 2 - 170, innerHeight / 2 - 150);
   });
@@ -1104,6 +1199,8 @@
         addBasketEntry(msg.target);
       } else if (pickMode === "step") {
         addStepEntry(msg.target);
+      } else if (pickMode === "multi") {
+        addMultiEntry(msg.target);
       } else {
         pendingTarget = msg.target;
         stopPicking();

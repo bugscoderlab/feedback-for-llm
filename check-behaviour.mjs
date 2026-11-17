@@ -232,6 +232,49 @@ const HARNESS_JS = `
     click($("ffab-fab")); // put the drawer back as it was
     await sleep(30);
 
+    // 7e. one note on several elements: multi-mode collects the run, Esc opens
+    //     the popover once, and the note lands on each pick as its own remark
+    click($("ffab-dr-multi"));
+    check("multi mode arms from the drawer",
+      $("ffab-dr-multi").classList.contains("ffab-on") && $("ffab-drawer").classList.contains("ffab-hidden"));
+    const au = $("add-user");
+    const aur = au.getBoundingClientRect();
+    au.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: aur.x + 2, clientY: aur.y + 2 }));
+    click(au);
+    await sleep(30);
+    check("a multi pick keeps the picker armed", document.body.classList.contains("ffab-annotating"));
+    const em = $("email");
+    const emr = em.getBoundingClientRect();
+    em.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: emr.x + 2, clientY: emr.y + 2 }));
+    click(em);
+    await sleep(30);
+    click(em); // a repeat click on the same element must not collect it twice
+    await sleep(30);
+    check("the pill counts the collected run",
+      $("ffab-cnt").textContent === "2", $("ffab-fab-label").textContent + " " + $("ffab-cnt").textContent);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await sleep(30);
+    check("Esc opens the popover for the run", !$("ffab-pop").classList.contains("ffab-hidden"));
+    check("the popover says how many elements were picked",
+      $("ffab-ap-ctx").textContent.indexOf("2 elements picked") !== -1, $("ffab-ap-ctx").textContent);
+    check("the popover lists every collected selector",
+      $("ffab-ap-sel").textContent.indexOf("#add-user") !== -1
+        && $("ffab-ap-sel").textContent.indexOf("#email") !== -1, $("ffab-ap-sel").textContent);
+    $("ffab-ap-note").value = "give these the same treatment";
+    click($("ffab-ap-save"));
+    await sleep(30);
+    check("one note becomes a remark per element", rec().annotations.length === 3,
+      JSON.stringify(rec().annotations.length));
+    check("both new remarks carry the shared note",
+      rec().annotations[1].note === "give these the same treatment"
+        && rec().annotations[2].note === "give these the same treatment");
+    check("each remark keeps its own selector",
+      rec().annotations[1].selector === "#add-user" && rec().annotations[2].selector === "#email");
+    check("each remark pins its own marker",
+      document.querySelectorAll("#ffab-markers .ffab-marker").length === 3);
+    click($("ffab-fab")); // put the drawer back as it was
+    await sleep(30);
+
     // 7f. clicking a numbered marker reopens the remark for editing
     const marker = $("ffab-markers").querySelector(".ffab-marker");
     check("the remark pins a numbered marker", !!marker && marker.textContent === "1");
@@ -244,7 +287,7 @@ const HARNESS_JS = `
     click($("ffab-ap-save"));
     await sleep(30);
     check("saving writes the note back, adding no remark",
-      rec().annotations.length === 1 && rec().annotations[0].note.indexOf("(edited)") !== -1);
+      rec().annotations.length === 3 && rec().annotations[0].note.indexOf("(edited)") !== -1);
 
     // 7g. picking reaches inside iframes: the subframe relay mirrors the
     // crosshair and forwards the pick to the top frame. The harness is not a
@@ -294,9 +337,9 @@ const HARNESS_JS = `
     click($("ffab-ap-save"));
     await sleep(30);
     check("the remark records component and source file",
-      rec().annotations.length === 2 && rec().annotations[1].component === "PricingCard" &&
-        rec().annotations[1].source === "src/components/PricingCard.tsx:42",
-      JSON.stringify(rec().annotations[1]));
+      rec().annotations.length === 4 && rec().annotations[3].component === "PricingCard" &&
+        rec().annotations[3].source === "src/components/PricingCard.tsx:42",
+      JSON.stringify(rec().annotations[3]));
 
     // production minification mangles names to one-letters — those are
     // garbage and must be reported as nothing, not shown.

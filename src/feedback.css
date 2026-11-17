@@ -306,12 +306,15 @@ body.ffab-stepping #ffab-highlight {
   flex: 1;
   white-space: nowrap;
 }
-/* The walkthrough gets a row of its own: three nowrap buttons on one 380px row
-   would squeeze the two existing pickers into unreadable stubs. */
-#ffab-drawer .ffab-dr-walk {
+/* The walkthrough and the shared-note picker get a row of their own: three
+   nowrap buttons on one 380px row would squeeze the two existing pickers into
+   unreadable stubs. */
+#ffab-drawer .ffab-dr-walk,
+#ffab-drawer .ffab-dr-multi {
   padding: 8px 16px 0;
 }
-#ffab-drawer .ffab-dr-walk .ffab-btn {
+#ffab-drawer .ffab-dr-walk .ffab-btn,
+#ffab-drawer .ffab-dr-multi .ffab-btn {
   width: 100%;
 }
 #ffab-drawer .ffab-dr-actions {
@@ -383,6 +386,7 @@ body.ffab-stepping #ffab-highlight {
 #ffab-drawer .ffab-dr-head,
 #ffab-drawer .ffab-dr-pickers,
 #ffab-drawer .ffab-dr-walk,
+#ffab-drawer .ffab-dr-multi,
 #ffab-drawer .ffab-dr-actions,
 #ffab-drawer .ffab-dr-review,
 #ffab-drawer .ffab-dr-manual {
