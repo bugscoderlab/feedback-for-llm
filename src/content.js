@@ -1190,6 +1190,14 @@
     setDrawerOpen(!isDrawerOpen());
   });
   $("ffab-dr-close").addEventListener("click", () => setDrawerOpen(false));
+  // A press anywhere outside the UI (drawer, pill, popover, markers…) puts the
+  // drawer away; the pill stays as the way back in. UI presses are let through
+  // so their own handlers run first (the pill toggles, a marker opens), and
+  // while picking the drawer is hidden anyway so the guard above exits early.
+  document.addEventListener("mousedown", (e) => {
+    if (!isDrawerOpen() || inUI(e.target)) return;
+    setDrawerOpen(false);
+  });
   $("ffab-dr-pick").addEventListener("click", () =>
     pickMode === "remark" ? stopPicking() : startPicking("remark")
   );

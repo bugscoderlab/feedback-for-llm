@@ -125,6 +125,16 @@ const HARNESS_JS = `
     check("the header carries the build version",
       $("ffab-version").textContent === "v0.0.0", $("ffab-version").textContent);
 
+    // 2b. a press outside the panel puts the drawer away, a press on it does not
+    const pressEl = (el) => el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    pressEl($("add-user"));
+    check("a press outside the drawer closes it", $("ffab-drawer").classList.contains("ffab-hidden"));
+    click($("ffab-fab")); // put the drawer back as it was
+    pressEl($("ffab-fab"));
+    check("a press on the pill does not close the drawer", !$("ffab-drawer").classList.contains("ffab-hidden"));
+    pressEl($("ffab-dr-list"));
+    check("a press inside the drawer leaves it open", !$("ffab-drawer").classList.contains("ffab-hidden"));
+
     // 3. arming the walkthrough takes over the page like the other pickers
     click($("ffab-dr-step"));
     check("step mode marks the body", document.body.classList.contains("ffab-stepping"));
